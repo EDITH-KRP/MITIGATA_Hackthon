@@ -28,6 +28,7 @@ if hasattr(sys.stdout, "reconfigure"):
         pass
 
 from .advisor import RemediationAdvisor
+from .attackpath import derive_run_relationships
 from .models import (
     FindingStatus,
     RunStatus,
@@ -41,7 +42,7 @@ from .orchestrator import Orchestrator
 from .preflight import format_candidates_table, list_candidate_networks
 from .ptes import PtesPhase
 from .report import ReportGenerator
-from .scope import PolicyGate
+from .scope import PolicyGate, setup_scope_for_target
 from .store import connect
 from .verify import VerificationService
 from .workers.binary import BinaryWorker
@@ -97,6 +98,25 @@ def cmd_select(args: argparse.Namespace) -> int:
     conn = _get_db(args.db)
 
     print("=== Phase B: Organiser Scope Selection ===")
+    target_arg = getattr(args, "target", None)
+    if target_arg:
+        exclusions: list[str] = []
+        if args.exclude:
+            exclusions = [e.strip() for e in args.exclude.split(",") if e.strip()]
+        binaries: dict[str, str] = {}
+        if args.binaries:
+            for b_path in args.binaries.split(","):
+                bp = Path(b_path.strip())
+                if bp.exists():
+                    digest = hashlib.sha256(bp.read_bytes()).hexdigest()
+                    binaries[str(bp)] = digest
+        manifest, _seed_url = setup_scope_for_target(
+            conn, target_arg, exclusions=exclusions, binaries=binaries, created_by="organiser-cli"
+        )
+        print(f"\n✅ Universal target `{target_arg}` scope locked as `{manifest.scope_version}`.")
+        print("Ready to run: execute `cart run` to start the autonomous assessment.")
+        return 0
+
     prefix = args.prefix
     if not prefix:
         candidates = list_candidate_networks()
@@ -176,25 +196,31 @@ def cmd_run(args: argparse.Namespace) -> int:
     """Phase C-H: Fully autonomous assessment run within locked scope."""
     conn = _get_db(args.db)
 
-    # Fetch latest locked scope manifest
-    row = conn.execute(
-        "SELECT scope_version, included_prefixes, included_hosts, exclusions, binary_hashes, created_by, locked_at "
-        "FROM scope_manifests WHERE locked_at IS NOT NULL ORDER BY locked_at DESC LIMIT 1"
-    ).fetchone()
+    seed_url: str | None = None
+    target_arg = getattr(args, "target", None)
+    if target_arg:
+        manifest, seed_url = setup_scope_for_target(conn, target_arg, created_by="organiser-cli")
+        print(f"[*] Universal Target Configured: {target_arg}")
+    else:
+        # Fetch latest locked scope manifest
+        row = conn.execute(
+            "SELECT scope_version, included_prefixes, included_hosts, exclusions, binary_hashes, created_by, locked_at "
+            "FROM scope_manifests WHERE locked_at IS NOT NULL ORDER BY locked_at DESC LIMIT 1"
+        ).fetchone()
 
-    if not row:
-        print("❌ No locked scope manifest found! Please run `cart select` first.")
-        return 1
+        if not row:
+            print("❌ No locked scope manifest found! Please specify --target or run `cart select` first.")
+            return 1
 
-    manifest = ScopeManifest(
-        scope_version=row[0],
-        included_prefixes=json.loads(row[1] or "[]"),
-        included_hosts=json.loads(row[2] or "[]"),
-        exclusions=json.loads(row[3] or "[]"),
-        binary_hashes=json.loads(row[4] or "{}"),
-        created_by=row[5],
-        locked_at=row[6],
-    )
+        manifest = ScopeManifest(
+            scope_version=row[0],
+            included_prefixes=json.loads(row[1] or "[]"),
+            included_hosts=json.loads(row[2] or "[]"),
+            exclusions=json.loads(row[3] or "[]"),
+            binary_hashes=json.loads(row[4] or "{}"),
+            created_by=row[5],
+            locked_at=row[6],
+        )
 
     run_id = new_id("run")
     start_time = utc_now()
@@ -252,6 +278,19 @@ def cmd_run(args: argparse.Namespace) -> int:
             budget={"timeout_s": 180, "retries": 1},
         )
         orchestrator.create_task(t)
+
+    if seed_url:
+        t_web = Task(
+            task_id=new_id("task"),
+            task_type="web_crawl_endpoint_discovery",
+            owner="web",
+            target_id=seed_url,
+            status=TaskStatus.READY,
+            ptes_phase=PtesPhase.INTELLIGENCE_GATHERING,
+            dedupe_key=f"{run_id}:web:{seed_url}",
+            budget={"timeout_s": 300, "retries": 1},
+        )
+        orchestrator.create_task(t_web)
 
     for b_path in manifest.binary_hashes:
         t = Task(
@@ -315,6 +354,10 @@ def cmd_run(args: argparse.Namespace) -> int:
     verifier.queue(fids)
     ver_results = verifier.verify_all_queued()
     print(f"[*] Verified {len(ver_results)} findings.")
+
+    # Derive evidence relationships for attack graph
+    rel_count = derive_run_relationships(conn, run_id)
+    print(f"[*] Constructed {rel_count} evidence-backed attack relationships.")
 
     # Final Report Generation
     print("\n[*] Generating Consolidated Assessment Report...")
@@ -443,12 +486,14 @@ def main(argv: list[str] | None = None) -> int:
 
     # cart select
     p_select = sub.add_parser("select", help="Phase B: organiser selects lab, locks scope")
+    p_select.add_argument("-t", "--target", help="Universal target URL, domain, IP, or CIDR to select and lock")
     p_select.add_argument("--prefix", help="Lab network CIDR prefix to select")
     p_select.add_argument("--exclude", help="Comma-separated CIDRs/IPs to exclude")
     p_select.add_argument("--binaries", help="Comma-separated binary file paths to register")
 
     # cart run
     p_run = sub.add_parser("run", help="Phase C-H: autonomous run to final report")
+    p_run.add_argument("-t", "--target", help="Universal target URL, domain, IP, or CIDR to lock scope and assess immediately")
     p_run.add_argument("--tier", default="recon", choices=["recon", "breach", "deep"], help="Assessment tier")
     p_run.add_argument("--concurrency", type=int, default=4, help="Max concurrent workers (default 4)")
     p_run.add_argument("--timeout", type=int, default=1200, help="Run budget timeout in seconds (default 1200 / 20 min)")

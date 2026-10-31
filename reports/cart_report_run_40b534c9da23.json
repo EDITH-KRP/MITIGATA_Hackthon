@@ -1,0 +1,514 @@
+{
+  "run_metadata": {
+    "run_id": "run_40b534c9da23",
+    "status": "partial",
+    "tier": "recon",
+    "started_at": "2026-10-31T21:10:13+00:00",
+    "completed_at": "2026-10-31T21:15:13+00:00",
+    "scope_version": "scope_019b1070fdd0"
+  },
+  "executive_summary": "Autonomous PTES assessment run run_40b534c9da23 (PARTIAL) discovered 2 asset(s) and 4 open service(s). Identified 9 finding(s) with 9 confirmed by deterministic playbooks. Severity distribution: 0 Critical, 0 High, 2 Medium, 7 Low. Scope safety enforced 0 out-of-scope denials with 0 safety leaks.",
+  "scope_manifest": {
+    "version": "scope_019b1070fdd0",
+    "prefixes": [
+      "127.0.0.1/32"
+    ],
+    "hosts": [
+      "127.0.0.1"
+    ],
+    "exclusions": [],
+    "binary_hashes": {},
+    "created_by": "ui-launcher",
+    "locked_at": "2026-10-31T21:10:13+00:00"
+  },
+  "inventory": [
+    {
+      "asset_id": "asset_3f5c524f9a2a",
+      "type": "host",
+      "canonical_key": "127.0.0.1",
+      "first_seen": "2026-10-31T21:10:21+00:00",
+      "last_seen": "2026-10-31T21:10:28+00:00",
+      "services": [
+        {
+          "port": 135,
+          "protocol": "tcp",
+          "name": "msrpc",
+          "banner": "Microsoft Windows RPC",
+          "state": "open"
+        },
+        {
+          "port": 445,
+          "protocol": "tcp",
+          "name": "microsoft-ds",
+          "banner": "",
+          "state": "open"
+        },
+        {
+          "port": 3306,
+          "protocol": "tcp",
+          "name": "mysql",
+          "banner": "MySQL 8.0.33",
+          "state": "open"
+        },
+        {
+          "port": 8080,
+          "protocol": "tcp",
+          "name": "http",
+          "banner": "BaseHTTPServer 0.6",
+          "state": "open"
+        }
+      ]
+    },
+    {
+      "asset_id": "asset_9d98e5b0ce87",
+      "type": "web_app",
+      "canonical_key": "127.0.0.1",
+      "first_seen": "2026-10-31T21:10:14+00:00",
+      "last_seen": "2026-10-31T21:10:14+00:00",
+      "services": []
+    }
+  ],
+  "findings": [
+    {
+      "finding_id": "find_32fab17583d0",
+      "asset_id": "asset_3f5c524f9a2a",
+      "target": "127.0.0.1",
+      "type": "non_standard_service_port",
+      "severity": "low",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Non-standard network service port 135/tcp (msrpc) exposed directly on target (CWE-657)",
+      "evidence": [
+        {
+          "evidence_id": "evid_d5b193991427",
+          "source_tool": "nmap",
+          "artifact_path": "127.0.0.1:135",
+          "hash": "6a4d6efea4aa4d6f1d6e113e275928a98e2be60cddf831c8d4d080ca2c7e4dfd",
+          "timestamp": "2026-10-31T21:10:21+00:00",
+          "excerpt": "port=135; protocol=tcp; service_name=msrpc",
+          "verification_method": "nmap_port_scan"
+        },
+        {
+          "evidence_id": "evid_dc9b1721166d",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "f11f70fde2d134d84cf550e1d399151d06d896d2fcbbbcdc3ade7544f6e7f101",
+          "timestamp": "2026-10-31T21:15:13+00:00",
+          "excerpt": "Non-standard listening port exposure confirmed by network scanner",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Direct Exposure of Non-Standard Network Port",
+        "summary": "Bind the service to localhost 127.0.0.1 or restrict access via host firewall.",
+        "plain_english": "A listening service is running on an unexpected, non-standard TCP port (CWE-657). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: low] Expands network attack surface and bypasses standard reverse proxy protections.",
+        "remediation_patch": "```bash\n# Restrict access with UFW firewall\nsudo ufw default deny incoming\nsudo ufw allow from 192.168.60.0/24 to any port 80 proto tcp\n```",
+        "cwe_id": "CWE-200 (Exposure of Sensitive Information)",
+        "cvss_score": "5.3",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+        "threat_vector": "Remote Network / Service Fingerprinting",
+        "reproduction_command": "nc -zv {target} {port}",
+        "verification_test": "nmap -sT -p {port} {target} -oG - | grep -i closed",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_71aabb6649ac",
+      "asset_id": "asset_3f5c524f9a2a",
+      "target": "127.0.0.1",
+      "type": "non_standard_service_port",
+      "severity": "low",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Non-standard network service port 445/tcp (microsoft-ds) exposed directly on target (CWE-657)",
+      "evidence": [
+        {
+          "evidence_id": "evid_65b500d9624a",
+          "source_tool": "nmap",
+          "artifact_path": "127.0.0.1:445",
+          "hash": "8f4a18c2a33a690ef298c6108889e9ee1b7904fecc9d066366fb057315c62c05",
+          "timestamp": "2026-10-31T21:10:21+00:00",
+          "excerpt": "port=445; protocol=tcp; service_name=microsoft-ds",
+          "verification_method": "nmap_port_scan"
+        },
+        {
+          "evidence_id": "evid_a5006ceb0493",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "f11f70fde2d134d84cf550e1d399151d06d896d2fcbbbcdc3ade7544f6e7f101",
+          "timestamp": "2026-10-31T21:15:13+00:00",
+          "excerpt": "Non-standard listening port exposure confirmed by network scanner",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Direct Exposure of Non-Standard Network Port",
+        "summary": "Bind the service to localhost 127.0.0.1 or restrict access via host firewall.",
+        "plain_english": "A listening service is running on an unexpected, non-standard TCP port (CWE-657). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: low] Expands network attack surface and bypasses standard reverse proxy protections.",
+        "remediation_patch": "```bash\n# Restrict access with UFW firewall\nsudo ufw default deny incoming\nsudo ufw allow from 192.168.60.0/24 to any port 80 proto tcp\n```",
+        "cwe_id": "CWE-200 (Exposure of Sensitive Information)",
+        "cvss_score": "5.3",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+        "threat_vector": "Remote Network / Service Fingerprinting",
+        "reproduction_command": "nc -zv {target} {port}",
+        "verification_test": "nmap -sT -p {port} {target} -oG - | grep -i closed",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_626c421ff376",
+      "asset_id": "asset_3f5c524f9a2a",
+      "target": "127.0.0.1",
+      "type": "non_standard_service_port",
+      "severity": "low",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Non-standard network service port 3306/tcp (mysql) exposed directly on target (CWE-657)",
+      "evidence": [
+        {
+          "evidence_id": "evid_039f7f07e41b",
+          "source_tool": "nmap",
+          "artifact_path": "127.0.0.1:3306",
+          "hash": "4faeea5f20ec9afcda7af7093220e96fb3e44761fb47a192d2bd0971b65842ae",
+          "timestamp": "2026-10-31T21:10:21+00:00",
+          "excerpt": "port=3306; protocol=tcp; service_name=mysql",
+          "verification_method": "nmap_port_scan"
+        },
+        {
+          "evidence_id": "evid_8223f218dfc0",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "f11f70fde2d134d84cf550e1d399151d06d896d2fcbbbcdc3ade7544f6e7f101",
+          "timestamp": "2026-10-31T21:15:13+00:00",
+          "excerpt": "Non-standard listening port exposure confirmed by network scanner",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Direct Exposure of Non-Standard Network Port",
+        "summary": "Bind the service to localhost 127.0.0.1 or restrict access via host firewall.",
+        "plain_english": "A listening service is running on an unexpected, non-standard TCP port (CWE-657). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: low] Expands network attack surface and bypasses standard reverse proxy protections.",
+        "remediation_patch": "```bash\n# Restrict access with UFW firewall\nsudo ufw default deny incoming\nsudo ufw allow from 192.168.60.0/24 to any port 80 proto tcp\n```",
+        "cwe_id": "CWE-200 (Exposure of Sensitive Information)",
+        "cvss_score": "5.3",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+        "threat_vector": "Remote Network / Service Fingerprinting",
+        "reproduction_command": "nc -zv {target} {port}",
+        "verification_test": "nmap -sT -p {port} {target} -oG - | grep -i closed",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_ce2cf372494a",
+      "asset_id": "asset_3f5c524f9a2a",
+      "target": "127.0.0.1",
+      "type": "network_service_fingerprint",
+      "severity": "low",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Software version fingerprint detected by network scanner: 3306/tcp running MySQL 8.0.33 (CWE-200)",
+      "evidence": [
+        {
+          "evidence_id": "evid_e1f1023c02e4",
+          "source_tool": "nmap",
+          "artifact_path": "127.0.0.1:3306",
+          "hash": "efbcc4a2c4adfed23a0a6114d95c10216c038fa67e2978dc5f720f6306c0fd29",
+          "timestamp": "2026-10-31T21:10:21+00:00",
+          "excerpt": "port=3306; service=mysql; version=MySQL 8.0.33",
+          "verification_method": "nmap_version_detection"
+        },
+        {
+          "evidence_id": "evid_72e0394ed307",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "1658e60ef909fba3b7c9a8753e8316b97a9fd3f875d13e995beeec46b91e06c3",
+          "timestamp": "2026-10-31T21:15:13+00:00",
+          "excerpt": "Software version detected in network banner confirmed by scanner",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Network Service Version Fingerprint Disclosed",
+        "summary": "Configure the service daemon to broadcast a generic banner or suppress version tokens.",
+        "plain_english": "Network port probes revealed specific software version numbers in the service banner (CWE-200). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: low] Enables attackers to immediately look up known public CVEs for that version.",
+        "remediation_patch": "```apache\nServerTokens Prod\nServerSignature Off\n```",
+        "cwe_id": "CWE-200 (Exposure of Sensitive System Details)",
+        "cvss_score": "5.3",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+        "threat_vector": "Remote Network / Automated Banner Reconnaissance",
+        "reproduction_command": "nc -nv {target} {port}",
+        "verification_test": "printf 'QUIT\n' | nc {target} {port}",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_763c74b29b96",
+      "asset_id": "asset_3f5c524f9a2a",
+      "target": "127.0.0.1",
+      "type": "unencrypted_cleartext_service",
+      "severity": "medium",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "vulnerability-analysis",
+      "summary": "Unencrypted cleartext service exposed on port 8080/tcp (http) without TLS encryption (CWE-319)",
+      "evidence": [
+        {
+          "evidence_id": "evid_ab36d580c0b7",
+          "source_tool": "nmap",
+          "artifact_path": "127.0.0.1:8080",
+          "hash": "4de29dec8c0cb7a7f12dff42356b32be706f2cfc4c88fee567531fe9e0b5dc5f",
+          "timestamp": "2026-10-31T21:10:21+00:00",
+          "excerpt": "port=8080; protocol=tcp; service=http; banner=BaseHTTPServer 0.6",
+          "verification_method": "nmap_service_probe"
+        },
+        {
+          "evidence_id": "evid_6b2721b40e2f",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "ee70d02dbc2f269eb8d687ec2fcd9eeb957adccf3967667d26e7d3f33fb1f503",
+          "timestamp": "2026-10-31T21:15:13+00:00",
+          "excerpt": "Unencrypted TCP listening service confirmed by network scan",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Unencrypted Cleartext Network Service",
+        "summary": "Terminate TLS using a reverse proxy (e.g. Nginx, HAProxy) or enable TLS natively.",
+        "plain_english": "A network service is communicating without Transport Layer Security (TLS/SSL). Traffic sent to or from this service is in cleartext and readable by network observers (CWE-319). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: medium] Eavesdropping and credential theft on transit networks.",
+        "remediation_patch": "```nginx\n# Terminate TLS with modern ciphers\nserver {\n    listen 443 ssl;\n    ssl_certificate /etc/ssl/certs/cert.pem;\n    ssl_certificate_key /etc/ssl/private/key.pem;\n}\n```",
+        "cwe_id": "CWE-319 (Cleartext Transmission of Sensitive Information)",
+        "cvss_score": "7.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+        "threat_vector": "Adjacent Network / Remote Eavesdropping (Man-in-the-Middle)",
+        "reproduction_command": "curl -v http://{target}:{port}/",
+        "verification_test": "curl -v --fail --tlsv1.3 https://{target}:{port}/",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_9b720b7cf5f6",
+      "asset_id": "asset_3f5c524f9a2a",
+      "target": "127.0.0.1",
+      "type": "non_standard_service_port",
+      "severity": "low",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Non-standard network service port 8080/tcp (http) exposed directly on target (CWE-657)",
+      "evidence": [
+        {
+          "evidence_id": "evid_ededba644e99",
+          "source_tool": "nmap",
+          "artifact_path": "127.0.0.1:8080",
+          "hash": "b678fa77dde442f6b0ba2fa3a0f4af238df5790666bfb2414405f2efc01c92c6",
+          "timestamp": "2026-10-31T21:10:21+00:00",
+          "excerpt": "port=8080; protocol=tcp; service_name=http",
+          "verification_method": "nmap_port_scan"
+        },
+        {
+          "evidence_id": "evid_b6be11e80e0a",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "f11f70fde2d134d84cf550e1d399151d06d896d2fcbbbcdc3ade7544f6e7f101",
+          "timestamp": "2026-10-31T21:15:13+00:00",
+          "excerpt": "Non-standard listening port exposure confirmed by network scanner",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Direct Exposure of Non-Standard Network Port",
+        "summary": "Bind the service to localhost 127.0.0.1 or restrict access via host firewall.",
+        "plain_english": "A listening service is running on an unexpected, non-standard TCP port (CWE-657). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: low] Expands network attack surface and bypasses standard reverse proxy protections.",
+        "remediation_patch": "```bash\n# Restrict access with UFW firewall\nsudo ufw default deny incoming\nsudo ufw allow from 192.168.60.0/24 to any port 80 proto tcp\n```",
+        "cwe_id": "CWE-200 (Exposure of Sensitive Information)",
+        "cvss_score": "5.3",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+        "threat_vector": "Remote Network / Service Fingerprinting",
+        "reproduction_command": "nc -zv {target} {port}",
+        "verification_test": "nmap -sT -p {port} {target} -oG - | grep -i closed",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_dae07f7720ca",
+      "asset_id": "asset_3f5c524f9a2a",
+      "target": "127.0.0.1",
+      "type": "network_service_fingerprint",
+      "severity": "low",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Software version fingerprint detected by network scanner: 8080/tcp running BaseHTTPServer 0.6 (CWE-200)",
+      "evidence": [
+        {
+          "evidence_id": "evid_ca608e358d31",
+          "source_tool": "nmap",
+          "artifact_path": "127.0.0.1:8080",
+          "hash": "0bb0360421b587073407393eece393c78d6464957519355f46878b10ad482553",
+          "timestamp": "2026-10-31T21:10:21+00:00",
+          "excerpt": "port=8080; service=http; version=BaseHTTPServer 0.6",
+          "verification_method": "nmap_version_detection"
+        },
+        {
+          "evidence_id": "evid_b2c895c58d80",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "1658e60ef909fba3b7c9a8753e8316b97a9fd3f875d13e995beeec46b91e06c3",
+          "timestamp": "2026-10-31T21:15:13+00:00",
+          "excerpt": "Software version detected in network banner confirmed by scanner",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Network Service Version Fingerprint Disclosed",
+        "summary": "Configure the service daemon to broadcast a generic banner or suppress version tokens.",
+        "plain_english": "Network port probes revealed specific software version numbers in the service banner (CWE-200). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: low] Enables attackers to immediately look up known public CVEs for that version.",
+        "remediation_patch": "```apache\nServerTokens Prod\nServerSignature Off\n```",
+        "cwe_id": "CWE-200 (Exposure of Sensitive System Details)",
+        "cvss_score": "5.3",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+        "threat_vector": "Remote Network / Automated Banner Reconnaissance",
+        "reproduction_command": "nc -nv {target} {port}",
+        "verification_test": "printf 'QUIT\n' | nc {target} {port}",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_6663643190b3",
+      "asset_id": "asset_9d98e5b0ce87",
+      "target": "127.0.0.1",
+      "type": "missing_security_headers",
+      "severity": "medium",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "vulnerability-analysis",
+      "summary": "Critical HTTP security headers missing at http://127.0.0.1:8080/: Content-Security-Policy, X-Frame-Options, X-Content-Type-Options: nosniff (CWE-1021, CWE-693, CWE-16)",
+      "evidence": [
+        {
+          "evidence_id": "evid_39ae0d301c4e",
+          "source_tool": "web_crawler",
+          "artifact_path": "http://127.0.0.1:8080/",
+          "hash": "51945709f1d6fdcb0fd59299315037e6aaf4d00970967af80e3de9ce91fe15d7",
+          "timestamp": "2026-10-31T21:10:14+00:00",
+          "excerpt": "{\"missing\": [\"Content-Security-Policy\", \"X-Frame-Options\", \"X-Content-Type-Options: nosniff\"], \"url\": \"http://127.0.0.1:8080/\"}",
+          "verification_method": "deterministic_header_audit"
+        },
+        {
+          "evidence_id": "evid_1342dbf8c176",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "050383e65a71ea90f255ec626cc7a71219c673d4f3f4fc5ec86e7a6a64e757e0",
+          "timestamp": "2026-10-31T21:15:13+00:00",
+          "excerpt": "Absence of critical HTTP defensive headers confirmed against web server",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Missing HTTP Security Defense Headers",
+        "summary": "Configure the web server to emit Content-Security-Policy, X-Frame-Options: DENY, and X-Content-Type-Options: nosniff.",
+        "plain_english": "The web server does not send critical HTTP defensive headers (Content-Security-Policy, X-Frame-Options, X-Content-Type-Options). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: medium] Leaves users exposed to Clickjacking (UI redressing), MIME confusion attacks, and Cross-Site Scripting (XSS).",
+        "remediation_patch": "```nginx\nadd_header X-Frame-Options \"DENY\" always;\nadd_header X-Content-Type-Options \"nosniff\" always;\nadd_header Content-Security-Policy \"default-src 'self'\" always;\n```",
+        "cwe_id": "CWE-693 (Protection Mechanism Failure)",
+        "cvss_score": "6.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:L/A:N",
+        "threat_vector": "Clickjacking / MIME Sniffing / Cross-Site Scripting",
+        "reproduction_command": "curl -sI http://{target}/",
+        "verification_test": "curl -sI https://{target}/ | grep -E '(Content-Security-Policy|X-Frame-Options|X-Content-Type-Options)'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_648f1419166e",
+      "asset_id": "asset_9d98e5b0ce87",
+      "target": "127.0.0.1",
+      "type": "server_banner_disclosure",
+      "severity": "low",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Software version disclosure in HTTP headers at http://127.0.0.1:8080/: Server: BaseHTTP/0.6 Python/3.13.7 (CWE-200)",
+      "evidence": [
+        {
+          "evidence_id": "evid_2a4f97463d4b",
+          "source_tool": "web_crawler",
+          "artifact_path": "http://127.0.0.1:8080/",
+          "hash": "e7c89cf49534d981815ad0d01e96581443bc6a184b96698f8cb59526d2e7116b",
+          "timestamp": "2026-10-31T21:10:14+00:00",
+          "excerpt": "url=http://127.0.0.1:8080/; Server: BaseHTTP/0.6 Python/3.13.7",
+          "verification_method": "deterministic_header_audit"
+        },
+        {
+          "evidence_id": "evid_484a309b96c1",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "653d0e8996aff6574e8063958f034e7efdb607ad71eb4e647f913b860b709a62",
+          "timestamp": "2026-10-31T21:15:13+00:00",
+          "excerpt": "Granular software version banner confirmed in server HTTP headers",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Detailed Software Version Disclosure",
+        "summary": "Suppress server version banners in web server configuration.",
+        "plain_english": "HTTP response headers expose specific product and version numbers (e.g., Server, X-Powered-By), assisting attackers in targeting known CVEs (CWE-200). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: low] Reconnaissance advantage for attackers seeking version-specific exploits.",
+        "remediation_patch": "```nginx\nserver_tokens off;\n```",
+        "cwe_id": "CWE-200 (Exposure of Software Version Information)",
+        "cvss_score": "5.3",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+        "threat_vector": "Automated Exploit Targeting / CVE Mapping",
+        "reproduction_command": "curl -sI http://{target}/ | grep -i Server",
+        "verification_test": "curl -sI https://{target}/ | grep -v -i 'Server: [a-zA-Z]'",
+        "references": []
+      }
+    }
+  ],
+  "captured_flags": [],
+  "attack_paths": [
+    {
+      "score": 0.9,
+      "hop_count": 1,
+      "edges": [
+        {
+          "source": "asset_3f5c524f9a2a",
+          "target": "asset_9d98e5b0ce87",
+          "technique": "WEB_SERVICE_EXPOSURE",
+          "confidence": "high",
+          "evidence_id": "evid_39ae0d301c4e"
+        }
+      ]
+    }
+  ],
+  "metrics": {
+    "scope_safety_out_of_bounds_probes": 0,
+    "scope_decisions_allowed": 1314,
+    "scope_decisions_denied": 0,
+    "total_assets_discovered": 2,
+    "total_services_discovered": 4,
+    "total_findings": 9,
+    "confirmed_findings": 9,
+    "verification_rate_pct": 100.0,
+    "false_alarm_rate_pct": 0.0,
+    "runtime_seconds": 300.0,
+    "autonomy_interventions": 0
+  },
+  "severity_counts": {
+    "critical": 0,
+    "high": 0,
+    "medium": 2,
+    "low": 7,
+    "info": 0
+  }
+}

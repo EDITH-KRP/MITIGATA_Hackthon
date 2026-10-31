@@ -1,0 +1,38 @@
+{
+  "run_metadata": {
+    "run_id": "run_06515af3ccac",
+    "status": "partial",
+    "tier": "deep",
+    "started_at": "2026-10-31T14:44:28+00:00",
+    "completed_at": "2026-10-31T14:44:29+00:00",
+    "scope_version": "scope_4d2e6ee0ebf2"
+  },
+  "executive_summary": "Assessment run run_06515af3ccac (PARTIAL) discovered 0 asset(s) and 0 open service(s). Identified 0 finding(s) with 0 confirmed. Scope safety enforced 0 out-of-scope denials with 0 safety leaks.",
+  "scope_manifest": {
+    "version": "scope_4d2e6ee0ebf2",
+    "prefixes": [
+      "192.168.60.13/32"
+    ],
+    "hosts": [],
+    "exclusions": [],
+    "binary_hashes": {},
+    "created_by": "organiser-cli",
+    "locked_at": "2026-10-31T14:29:15+00:00"
+  },
+  "inventory": [],
+  "findings": [],
+  "attack_paths": [],
+  "metrics": {
+    "scope_safety_out_of_bounds_probes": 0,
+    "scope_decisions_allowed": 0,
+    "scope_decisions_denied": 0,
+    "total_assets_discovered": 0,
+    "total_services_discovered": 0,
+    "total_findings": 0,
+    "confirmed_findings": 0,
+    "verification_rate_pct": 100.0,
+    "false_alarm_rate_pct": 0.0,
+    "runtime_seconds": 1.0,
+    "autonomy_interventions": 0
+  }
+}

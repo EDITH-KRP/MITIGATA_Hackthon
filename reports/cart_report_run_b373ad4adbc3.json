@@ -1,0 +1,1486 @@
+{
+  "run_metadata": {
+    "run_id": "run_b373ad4adbc3",
+    "status": "completed",
+    "tier": "deep",
+    "started_at": "2026-10-31T19:59:17+00:00",
+    "completed_at": "2026-10-31T20:00:49+00:00",
+    "scope_version": "scope_226291825e3d"
+  },
+  "executive_summary": "Autonomous PTES assessment run run_b373ad4adbc3 (COMPLETED) discovered 3 asset(s) and 4 open service(s). Identified 13 finding(s) with 13 confirmed by deterministic playbooks. Severity distribution: 0 Critical, 0 High, 9 Medium, 4 Low. Scope safety enforced 0 out-of-scope denials with 0 safety leaks.",
+  "scope_manifest": {
+    "version": "scope_226291825e3d",
+    "prefixes": [
+      "81.169.145.156/32"
+    ],
+    "hosts": [
+      "81.169.145.156"
+    ],
+    "exclusions": [],
+    "binary_hashes": {},
+    "created_by": "ui-launcher",
+    "locked_at": "2026-10-31T19:59:17+00:00"
+  },
+  "inventory": [
+    {
+      "asset_id": "asset_7c33ad96735d",
+      "type": "host",
+      "canonical_key": "81.169.145.156",
+      "first_seen": "2026-10-31T20:00:03+00:00",
+      "last_seen": "2026-10-31T20:00:49+00:00",
+      "services": [
+        {
+          "port": 21,
+          "protocol": "tcp",
+          "name": "tcpwrapped",
+          "banner": "",
+          "state": "open"
+        },
+        {
+          "port": 80,
+          "protocol": "tcp",
+          "name": "http",
+          "banner": "",
+          "state": "open"
+        },
+        {
+          "port": 443,
+          "protocol": "tcp",
+          "name": "https",
+          "banner": "",
+          "state": "open"
+        },
+        {
+          "port": 8080,
+          "protocol": "tcp",
+          "name": "http-proxy",
+          "banner": "",
+          "state": "open"
+        }
+      ]
+    },
+    {
+      "asset_id": "asset_c04eb5d084d1",
+      "type": "web_app",
+      "canonical_key": "81.169.145.156",
+      "first_seen": "2026-10-31T20:00:14+00:00",
+      "last_seen": "2026-10-31T20:00:14+00:00",
+      "services": []
+    },
+    {
+      "asset_id": "asset_ef89f514553a",
+      "type": "web_app",
+      "canonical_key": "preview.owasp-juice.shop",
+      "first_seen": "2026-10-31T19:59:18+00:00",
+      "last_seen": "2026-10-31T19:59:18+00:00",
+      "services": []
+    }
+  ],
+  "findings": [
+    {
+      "finding_id": "find_bf7343604f34",
+      "asset_id": "asset_7c33ad96735d",
+      "target": "81.169.145.156",
+      "type": "unencrypted_cleartext_service",
+      "severity": "medium",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "vulnerability-analysis",
+      "summary": "Unencrypted cleartext service exposed on port 21/tcp (tcpwrapped) without TLS encryption (CWE-319)",
+      "evidence": [
+        {
+          "evidence_id": "evid_1589eba5f99b",
+          "source_tool": "nmap",
+          "artifact_path": "81.169.145.156:21",
+          "hash": "621bafa254f302952a8d66663bd6da9a72d4534292dda8c18b582c6fb74b1478",
+          "timestamp": "2026-10-31T20:00:03+00:00",
+          "excerpt": "port=21; protocol=tcp; service=tcpwrapped; banner=",
+          "verification_method": "nmap_service_probe"
+        },
+        {
+          "evidence_id": "evid_4e8534b985e6",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "ee70d02dbc2f269eb8d687ec2fcd9eeb957adccf3967667d26e7d3f33fb1f503",
+          "timestamp": "2026-10-31T20:00:49+00:00",
+          "excerpt": "Unencrypted TCP listening service confirmed by network scan",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Unencrypted Cleartext Network Service",
+        "summary": "Terminate TLS using a reverse proxy (e.g. Nginx, HAProxy) or enable TLS natively.",
+        "plain_english": "A network service is communicating without Transport Layer Security (TLS/SSL). Traffic sent to or from this service is in cleartext and readable by network observers (CWE-319). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: medium] Eavesdropping and credential theft on transit networks.",
+        "remediation_patch": "```nginx\n# Terminate TLS with modern ciphers\nserver {\n    listen 443 ssl;\n    ssl_certificate /etc/ssl/certs/cert.pem;\n    ssl_certificate_key /etc/ssl/private/key.pem;\n}\n```",
+        "cwe_id": "CWE-319 (Cleartext Transmission of Sensitive Information)",
+        "cvss_score": "7.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+        "threat_vector": "Adjacent Network / Remote Eavesdropping (Man-in-the-Middle)",
+        "reproduction_command": "curl -v http://{target}:{port}/",
+        "verification_test": "curl -v --fail --tlsv1.3 https://{target}:{port}/",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_c1aecceeb2ac",
+      "asset_id": "asset_7c33ad96735d",
+      "target": "81.169.145.156",
+      "type": "unencrypted_cleartext_service",
+      "severity": "medium",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "vulnerability-analysis",
+      "summary": "Unencrypted cleartext service exposed on port 80/tcp (http) without TLS encryption (CWE-319)",
+      "evidence": [
+        {
+          "evidence_id": "evid_369d37025170",
+          "source_tool": "nmap",
+          "artifact_path": "81.169.145.156:80",
+          "hash": "509d2d3850ac90c85327dd5803bc948a433170fe2e0fa7aaef954adc722f4b8b",
+          "timestamp": "2026-10-31T20:00:03+00:00",
+          "excerpt": "port=80; protocol=tcp; service=http; banner=",
+          "verification_method": "nmap_service_probe"
+        },
+        {
+          "evidence_id": "evid_d96ad9efbc87",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "ee70d02dbc2f269eb8d687ec2fcd9eeb957adccf3967667d26e7d3f33fb1f503",
+          "timestamp": "2026-10-31T20:00:49+00:00",
+          "excerpt": "Unencrypted TCP listening service confirmed by network scan",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Unencrypted Cleartext Network Service",
+        "summary": "Terminate TLS using a reverse proxy (e.g. Nginx, HAProxy) or enable TLS natively.",
+        "plain_english": "A network service is communicating without Transport Layer Security (TLS/SSL). Traffic sent to or from this service is in cleartext and readable by network observers (CWE-319). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: medium] Eavesdropping and credential theft on transit networks.",
+        "remediation_patch": "```nginx\n# Terminate TLS with modern ciphers\nserver {\n    listen 443 ssl;\n    ssl_certificate /etc/ssl/certs/cert.pem;\n    ssl_certificate_key /etc/ssl/private/key.pem;\n}\n```",
+        "cwe_id": "CWE-319 (Cleartext Transmission of Sensitive Information)",
+        "cvss_score": "7.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+        "threat_vector": "Adjacent Network / Remote Eavesdropping (Man-in-the-Middle)",
+        "reproduction_command": "curl -v http://{target}:{port}/",
+        "verification_test": "curl -v --fail --tlsv1.3 https://{target}:{port}/",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_08ff7624360f",
+      "asset_id": "asset_7c33ad96735d",
+      "target": "81.169.145.156",
+      "type": "unencrypted_cleartext_service",
+      "severity": "medium",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "vulnerability-analysis",
+      "summary": "Unencrypted cleartext service exposed on port 8080/tcp (http-proxy) without TLS encryption (CWE-319)",
+      "evidence": [
+        {
+          "evidence_id": "evid_bbe360352207",
+          "source_tool": "nmap",
+          "artifact_path": "81.169.145.156:8080",
+          "hash": "cccc71b2113e5314aba54c1db2606687329e82ee68a88492eeac89274f5c26d5",
+          "timestamp": "2026-10-31T20:00:03+00:00",
+          "excerpt": "port=8080; protocol=tcp; service=http-proxy; banner=",
+          "verification_method": "nmap_service_probe"
+        },
+        {
+          "evidence_id": "evid_4376236d7394",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "ee70d02dbc2f269eb8d687ec2fcd9eeb957adccf3967667d26e7d3f33fb1f503",
+          "timestamp": "2026-10-31T20:00:49+00:00",
+          "excerpt": "Unencrypted TCP listening service confirmed by network scan",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Unencrypted Cleartext Network Service",
+        "summary": "Terminate TLS using a reverse proxy (e.g. Nginx, HAProxy) or enable TLS natively.",
+        "plain_english": "A network service is communicating without Transport Layer Security (TLS/SSL). Traffic sent to or from this service is in cleartext and readable by network observers (CWE-319). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: medium] Eavesdropping and credential theft on transit networks.",
+        "remediation_patch": "```nginx\n# Terminate TLS with modern ciphers\nserver {\n    listen 443 ssl;\n    ssl_certificate /etc/ssl/certs/cert.pem;\n    ssl_certificate_key /etc/ssl/private/key.pem;\n}\n```",
+        "cwe_id": "CWE-319 (Cleartext Transmission of Sensitive Information)",
+        "cvss_score": "7.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+        "threat_vector": "Adjacent Network / Remote Eavesdropping (Man-in-the-Middle)",
+        "reproduction_command": "curl -v http://{target}:{port}/",
+        "verification_test": "curl -v --fail --tlsv1.3 https://{target}:{port}/",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_9b45223147ba",
+      "asset_id": "asset_7c33ad96735d",
+      "target": "81.169.145.156",
+      "type": "non_standard_service_port",
+      "severity": "low",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Non-standard network service port 8080/tcp (http-proxy) exposed directly on target (CWE-657)",
+      "evidence": [
+        {
+          "evidence_id": "evid_18c145e8b3ae",
+          "source_tool": "nmap",
+          "artifact_path": "81.169.145.156:8080",
+          "hash": "21244d069604ad379e4c896ff67ab7e56d08d69b4c5aa47406a588a58e56fb35",
+          "timestamp": "2026-10-31T20:00:03+00:00",
+          "excerpt": "port=8080; protocol=tcp; service_name=http-proxy",
+          "verification_method": "nmap_port_scan"
+        },
+        {
+          "evidence_id": "evid_15f695146221",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "f11f70fde2d134d84cf550e1d399151d06d896d2fcbbbcdc3ade7544f6e7f101",
+          "timestamp": "2026-10-31T20:00:49+00:00",
+          "excerpt": "Non-standard listening port exposure confirmed by network scanner",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Direct Exposure of Non-Standard Network Port",
+        "summary": "Bind the service to localhost 127.0.0.1 or restrict access via host firewall.",
+        "plain_english": "A listening service is running on an unexpected, non-standard TCP port (CWE-657). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: low] Expands network attack surface and bypasses standard reverse proxy protections.",
+        "remediation_patch": "```bash\n# Restrict access with UFW firewall\nsudo ufw default deny incoming\nsudo ufw allow from 192.168.60.0/24 to any port 80 proto tcp\n```",
+        "cwe_id": "CWE-200 (Exposure of Sensitive Information)",
+        "cvss_score": "5.3",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+        "threat_vector": "Remote Network / Service Fingerprinting",
+        "reproduction_command": "nc -zv {target} {port}",
+        "verification_test": "nmap -sT -p {port} {target} -oG - | grep -i closed",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_fb9889cc5a19",
+      "asset_id": "asset_c04eb5d084d1",
+      "target": "81.169.145.156",
+      "type": "missing_security_headers",
+      "severity": "medium",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "vulnerability-analysis",
+      "summary": "Critical HTTP security headers missing at http://81.169.145.156/: Content-Security-Policy, X-Frame-Options, X-Content-Type-Options: nosniff (CWE-1021, CWE-693, CWE-16)",
+      "evidence": [
+        {
+          "evidence_id": "evid_91744887f0f2",
+          "source_tool": "web_crawler",
+          "artifact_path": "http://81.169.145.156/",
+          "hash": "6a362ee42d827ddf3e0f2d3c18927dd88fad9c9b66fa7c2f41d80b355a2c067a",
+          "timestamp": "2026-10-31T20:00:14+00:00",
+          "excerpt": "{\"missing\": [\"Content-Security-Policy\", \"X-Frame-Options\", \"X-Content-Type-Options: nosniff\"], \"url\": \"http://81.169.145.156/\"}",
+          "verification_method": "deterministic_header_audit"
+        },
+        {
+          "evidence_id": "evid_4e6493723668",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "050383e65a71ea90f255ec626cc7a71219c673d4f3f4fc5ec86e7a6a64e757e0",
+          "timestamp": "2026-10-31T20:00:49+00:00",
+          "excerpt": "Absence of critical HTTP defensive headers confirmed against web server",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Missing HTTP Security Defense Headers",
+        "summary": "Configure the web server to emit Content-Security-Policy, X-Frame-Options: DENY, and X-Content-Type-Options: nosniff.",
+        "plain_english": "The web server does not send critical HTTP defensive headers (Content-Security-Policy, X-Frame-Options, X-Content-Type-Options). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: medium] Leaves users exposed to Clickjacking (UI redressing), MIME confusion attacks, and Cross-Site Scripting (XSS).",
+        "remediation_patch": "```nginx\nadd_header X-Frame-Options \"DENY\" always;\nadd_header X-Content-Type-Options \"nosniff\" always;\nadd_header Content-Security-Policy \"default-src 'self'\" always;\n```",
+        "cwe_id": "CWE-693 (Protection Mechanism Failure)",
+        "cvss_score": "6.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:L/A:N",
+        "threat_vector": "Clickjacking / MIME Sniffing / Cross-Site Scripting",
+        "reproduction_command": "curl -sI http://{target}/",
+        "verification_test": "curl -sI https://{target}/ | grep -E '(Content-Security-Policy|X-Frame-Options|X-Content-Type-Options)'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_bdcc9bef8a25",
+      "asset_id": "asset_c04eb5d084d1",
+      "target": "81.169.145.156",
+      "type": "server_banner_disclosure",
+      "severity": "low",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Software version disclosure in HTTP headers at http://81.169.145.156/: Server: Apache/2.4.69 (Unix) (CWE-200)",
+      "evidence": [
+        {
+          "evidence_id": "evid_0451ae49232f",
+          "source_tool": "web_crawler",
+          "artifact_path": "http://81.169.145.156/",
+          "hash": "bba63c3686e351dbf2af784a1194b8db66296ca414a89be6e591b736d00c9d59",
+          "timestamp": "2026-10-31T20:00:14+00:00",
+          "excerpt": "url=http://81.169.145.156/; Server: Apache/2.4.69 (Unix)",
+          "verification_method": "deterministic_header_audit"
+        },
+        {
+          "evidence_id": "evid_e27cc6083ff0",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "653d0e8996aff6574e8063958f034e7efdb607ad71eb4e647f913b860b709a62",
+          "timestamp": "2026-10-31T20:00:49+00:00",
+          "excerpt": "Granular software version banner confirmed in server HTTP headers",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Detailed Software Version Disclosure",
+        "summary": "Suppress server version banners in web server configuration.",
+        "plain_english": "HTTP response headers expose specific product and version numbers (e.g., Server, X-Powered-By), assisting attackers in targeting known CVEs (CWE-200). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: low] Reconnaissance advantage for attackers seeking version-specific exploits.",
+        "remediation_patch": "```nginx\nserver_tokens off;\n```",
+        "cwe_id": "CWE-200 (Exposure of Software Version Information)",
+        "cvss_score": "5.3",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+        "threat_vector": "Automated Exploit Targeting / CVE Mapping",
+        "reproduction_command": "curl -sI http://{target}/ | grep -i Server",
+        "verification_test": "curl -sI https://{target}/ | grep -v -i 'Server: [a-zA-Z]'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_b642f0ba0e9d",
+      "asset_id": "asset_c04eb5d084d1",
+      "target": "81.169.145.156",
+      "type": "missing_security_headers",
+      "severity": "medium",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "vulnerability-analysis",
+      "summary": "Critical HTTP security headers missing at http://81.169.145.156:8080/: Content-Security-Policy, X-Frame-Options, X-Content-Type-Options: nosniff (CWE-1021, CWE-693, CWE-16)",
+      "evidence": [
+        {
+          "evidence_id": "evid_79f9c551ebc2",
+          "source_tool": "web_crawler",
+          "artifact_path": "http://81.169.145.156:8080/",
+          "hash": "4eaa4866eee287b8c7badad03b27f633ba5a8818f487d0dfd492d9f55299d122",
+          "timestamp": "2026-10-31T20:00:14+00:00",
+          "excerpt": "{\"missing\": [\"Content-Security-Policy\", \"X-Frame-Options\", \"X-Content-Type-Options: nosniff\"], \"url\": \"http://81.169.145.156:8080/\"}",
+          "verification_method": "deterministic_header_audit"
+        },
+        {
+          "evidence_id": "evid_8f593baa75bb",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "050383e65a71ea90f255ec626cc7a71219c673d4f3f4fc5ec86e7a6a64e757e0",
+          "timestamp": "2026-10-31T20:00:49+00:00",
+          "excerpt": "Absence of critical HTTP defensive headers confirmed against web server",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Missing HTTP Security Defense Headers",
+        "summary": "Configure the web server to emit Content-Security-Policy, X-Frame-Options: DENY, and X-Content-Type-Options: nosniff.",
+        "plain_english": "The web server does not send critical HTTP defensive headers (Content-Security-Policy, X-Frame-Options, X-Content-Type-Options). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: medium] Leaves users exposed to Clickjacking (UI redressing), MIME confusion attacks, and Cross-Site Scripting (XSS).",
+        "remediation_patch": "```nginx\nadd_header X-Frame-Options \"DENY\" always;\nadd_header X-Content-Type-Options \"nosniff\" always;\nadd_header Content-Security-Policy \"default-src 'self'\" always;\n```",
+        "cwe_id": "CWE-693 (Protection Mechanism Failure)",
+        "cvss_score": "6.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:L/A:N",
+        "threat_vector": "Clickjacking / MIME Sniffing / Cross-Site Scripting",
+        "reproduction_command": "curl -sI http://{target}/",
+        "verification_test": "curl -sI https://{target}/ | grep -E '(Content-Security-Policy|X-Frame-Options|X-Content-Type-Options)'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_9ee56975c57c",
+      "asset_id": "asset_c04eb5d084d1",
+      "target": "81.169.145.156",
+      "type": "server_banner_disclosure",
+      "severity": "low",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Software version disclosure in HTTP headers at http://81.169.145.156:8080/: Server: Apache/2.4.69 (Unix) (CWE-200)",
+      "evidence": [
+        {
+          "evidence_id": "evid_3f93b6b70c38",
+          "source_tool": "web_crawler",
+          "artifact_path": "http://81.169.145.156:8080/",
+          "hash": "1d7911683dd480c73385cf43472be2c2cfd9e49da56eb8a9f32ea48dd8108229",
+          "timestamp": "2026-10-31T20:00:14+00:00",
+          "excerpt": "url=http://81.169.145.156:8080/; Server: Apache/2.4.69 (Unix)",
+          "verification_method": "deterministic_header_audit"
+        },
+        {
+          "evidence_id": "evid_8ba07dcf50d8",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "653d0e8996aff6574e8063958f034e7efdb607ad71eb4e647f913b860b709a62",
+          "timestamp": "2026-10-31T20:00:49+00:00",
+          "excerpt": "Granular software version banner confirmed in server HTTP headers",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Detailed Software Version Disclosure",
+        "summary": "Suppress server version banners in web server configuration.",
+        "plain_english": "HTTP response headers expose specific product and version numbers (e.g., Server, X-Powered-By), assisting attackers in targeting known CVEs (CWE-200). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: low] Reconnaissance advantage for attackers seeking version-specific exploits.",
+        "remediation_patch": "```nginx\nserver_tokens off;\n```",
+        "cwe_id": "CWE-200 (Exposure of Software Version Information)",
+        "cvss_score": "5.3",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+        "threat_vector": "Automated Exploit Targeting / CVE Mapping",
+        "reproduction_command": "curl -sI http://{target}/ | grep -i Server",
+        "verification_test": "curl -sI https://{target}/ | grep -v -i 'Server: [a-zA-Z]'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_8e3a91e37bfa",
+      "asset_id": "asset_ef89f514553a",
+      "target": "preview.owasp-juice.shop",
+      "type": "robots_txt_disclosure",
+      "severity": "low",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Sensitive paths disclosed in robots.txt at https://preview.owasp-juice.shop/robots.txt: /ftp (CWE-200, CWE-548)",
+      "evidence": [
+        {
+          "evidence_id": "evid_a83edf4c1513",
+          "source_tool": "web_crawler",
+          "artifact_path": "https://preview.owasp-juice.shop/robots.txt",
+          "hash": "148e142436e9c8b844f3cff1ab3974e4d6eb2739c97b195b2447bcbcffae6ac1",
+          "timestamp": "2026-10-31T19:59:18+00:00",
+          "excerpt": "Disallowed paths: /ftp",
+          "verification_method": "deterministic_header_audit"
+        },
+        {
+          "evidence_id": "evid_6065e55489d8",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "426af5ad3cdb41f80b2442a4c27b08cd93414b7f16328e0aed382ff2656f5ffb",
+          "timestamp": "2026-10-31T20:00:49+00:00",
+          "excerpt": "Disallowed path enumeration confirmed in live robots.txt policy",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Sensitive Directory & Route Disclosure in Robots.txt",
+        "summary": "Remove internal or secret routes from robots.txt. Enforce server-side authentication and authorization guards on all backend resources rather than relying on search crawler exclusion rules.",
+        "plain_english": "The web server discloses confidential or administrative paths in Disallow directives within robots.txt, providing attackers with a roadmap of unlinked backend assets (CWE-200). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: low] Accelerates adversarial reconnaissance by revealing administrative panels, backup endpoints, and hidden folders.",
+        "remediation_patch": "```text\n# Sanitized robots.txt - exclude search engine indexing without leaking sensitive paths\nUser-agent: *\nDisallow: /search\n```",
+        "cwe_id": "CWE-200 (Exposure of Sensitive Information) / CWE-548",
+        "cvss_score": "3.3",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+        "threat_vector": "Automated Reconnaissance / Information Disclosure via Robots.txt",
+        "reproduction_command": "curl -s http://{target}/robots.txt",
+        "verification_test": "curl -s http://{target}/robots.txt | grep -i 'Disallow'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_cac9e99f3936",
+      "asset_id": "asset_ef89f514553a",
+      "target": "preview.owasp-juice.shop",
+      "type": "unauthenticated_api_exposure",
+      "severity": "medium",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "vulnerability-analysis",
+      "summary": "Unauthenticated REST API endpoint exposed at https://preview.owasp-juice.shop/api/Challenges disclosing structured data (CWE-306)",
+      "evidence": [
+        {
+          "evidence_id": "evid_f8d0bf16275e",
+          "source_tool": "web_crawler",
+          "artifact_path": "https://preview.owasp-juice.shop/api/Challenges",
+          "hash": "d6d31a8888f7db6c3680feae63ee339e1a6fc153c549d6a8828721a2d6ed2aaa",
+          "timestamp": "2026-10-31T19:59:19+00:00",
+          "excerpt": "{\"status\":\"success\",\"data\":[{\"id\":1,\"key\":\"passwordHashLeakChallenge\",\"name\":\"Password Hash Leak\",\"category\":\"Sensitive Data Exposure\",\"tags\":null,\"description\":\"Obtain the password (hash) of the currently logged-in user directly from a REST API endpoint.\",\"difficulty\":2,\"mitigationUrl\":\"https://owa",
+          "verification_method": "deterministic_header_audit"
+        },
+        {
+          "evidence_id": "evid_e106fd45192d",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "3e5e05b21af041f90f62b47a7d2bf869818d1500ef0e215a76f93502a5d4500b",
+          "timestamp": "2026-10-31T20:00:49+00:00",
+          "excerpt": "Unauthenticated REST API response returning structured data confirmed",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Unauthenticated REST/Administrative API Exposure",
+        "summary": "Require robust authentication (e.g. JWT verification, Bearer tokens, or session cookies) in the API router middleware before serving requests.",
+        "plain_english": "An internal REST or administrative API endpoint responds with structured application data to unauthenticated requests without requiring a valid session, token, or API key (CWE-306). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: medium] Direct exfiltration of operational metadata, user database entries, challenge states, and business logic bypass.",
+        "remediation_patch": "```javascript\n// Express.js API authentication guard middleware\nconst jwt = require('jsonwebtoken');\n\nfunction authenticateToken(req, res, next) {\n  const authHeader = req.headers['authorization'];\n  const token = authHeader && authHeader.split(' ')[1];\n  if (!token) return res.sendStatus(401);\n  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {\n    if (err) return res.sendStatus(403);\n    req.user = user;\n    next();\n  });\n}\napp.use('/api', authenticateToken);\n```",
+        "cwe_id": "CWE-306 (Missing Authentication for Critical Function)",
+        "cvss_score": "7.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+        "threat_vector": "Direct Unauthenticated REST API Access",
+        "reproduction_command": "curl -s http://{target}/api/Challenges",
+        "verification_test": "curl -s -o /dev/null -w '%{http_code}' http://{target}/api/Challenges | grep '401\\|403'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_8b1acf38853f",
+      "asset_id": "asset_ef89f514553a",
+      "target": "preview.owasp-juice.shop",
+      "type": "unauthenticated_api_exposure",
+      "severity": "medium",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "vulnerability-analysis",
+      "summary": "Unauthenticated REST API endpoint exposed at https://preview.owasp-juice.shop/rest/admin/application-version disclosing structured data (CWE-306)",
+      "evidence": [
+        {
+          "evidence_id": "evid_34562a9bb3f6",
+          "source_tool": "web_crawler",
+          "artifact_path": "https://preview.owasp-juice.shop/rest/admin/application-version",
+          "hash": "bdb6a0e5bff93979edc9a4ffe63c61d3b6ede71861c5f92ed6f567350ab5904d",
+          "timestamp": "2026-10-31T19:59:20+00:00",
+          "excerpt": "{\"version\":\"20.4.0-SNAPSHOT\"}",
+          "verification_method": "deterministic_header_audit"
+        },
+        {
+          "evidence_id": "evid_e42e06a30a4b",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "3e5e05b21af041f90f62b47a7d2bf869818d1500ef0e215a76f93502a5d4500b",
+          "timestamp": "2026-10-31T20:00:49+00:00",
+          "excerpt": "Unauthenticated REST API response returning structured data confirmed",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Unauthenticated REST/Administrative API Exposure",
+        "summary": "Require robust authentication (e.g. JWT verification, Bearer tokens, or session cookies) in the API router middleware before serving requests.",
+        "plain_english": "An internal REST or administrative API endpoint responds with structured application data to unauthenticated requests without requiring a valid session, token, or API key (CWE-306). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: medium] Direct exfiltration of operational metadata, user database entries, challenge states, and business logic bypass.",
+        "remediation_patch": "```javascript\n// Express.js API authentication guard middleware\nconst jwt = require('jsonwebtoken');\n\nfunction authenticateToken(req, res, next) {\n  const authHeader = req.headers['authorization'];\n  const token = authHeader && authHeader.split(' ')[1];\n  if (!token) return res.sendStatus(401);\n  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {\n    if (err) return res.sendStatus(403);\n    req.user = user;\n    next();\n  });\n}\napp.use('/api', authenticateToken);\n```",
+        "cwe_id": "CWE-306 (Missing Authentication for Critical Function)",
+        "cvss_score": "7.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+        "threat_vector": "Direct Unauthenticated REST API Access",
+        "reproduction_command": "curl -s http://{target}/api/Challenges",
+        "verification_test": "curl -s -o /dev/null -w '%{http_code}' http://{target}/api/Challenges | grep '401\\|403'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_2b076c0152a5",
+      "asset_id": "asset_ef89f514553a",
+      "target": "preview.owasp-juice.shop",
+      "type": "missing_security_headers",
+      "severity": "medium",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "vulnerability-analysis",
+      "summary": "Critical HTTP security headers missing at https://preview.owasp-juice.shop/: Content-Security-Policy, Strict-Transport-Security (CWE-1021, CWE-693, CWE-16)",
+      "evidence": [
+        {
+          "evidence_id": "evid_a9cf7634c9ad",
+          "source_tool": "web_crawler",
+          "artifact_path": "https://preview.owasp-juice.shop/",
+          "hash": "471bd180de4708abd96ba18a55947efe10dbadc428411a29f3bb1215389612a4",
+          "timestamp": "2026-10-31T19:59:27+00:00",
+          "excerpt": "{\"missing\": [\"Content-Security-Policy\", \"Strict-Transport-Security\"], \"url\": \"https://preview.owasp-juice.shop/\"}",
+          "verification_method": "deterministic_header_audit"
+        },
+        {
+          "evidence_id": "evid_bb7fa0ac45e3",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "050383e65a71ea90f255ec626cc7a71219c673d4f3f4fc5ec86e7a6a64e757e0",
+          "timestamp": "2026-10-31T20:00:49+00:00",
+          "excerpt": "Absence of critical HTTP defensive headers confirmed against web server",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Missing HTTP Security Defense Headers",
+        "summary": "Configure the web server to emit Content-Security-Policy, X-Frame-Options: DENY, and X-Content-Type-Options: nosniff.",
+        "plain_english": "The web server does not send critical HTTP defensive headers (Content-Security-Policy, X-Frame-Options, X-Content-Type-Options). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: medium] Leaves users exposed to Clickjacking (UI redressing), MIME confusion attacks, and Cross-Site Scripting (XSS).",
+        "remediation_patch": "```nginx\nadd_header X-Frame-Options \"DENY\" always;\nadd_header X-Content-Type-Options \"nosniff\" always;\nadd_header Content-Security-Policy \"default-src 'self'\" always;\n```",
+        "cwe_id": "CWE-693 (Protection Mechanism Failure)",
+        "cvss_score": "6.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:L/A:N",
+        "threat_vector": "Clickjacking / MIME Sniffing / Cross-Site Scripting",
+        "reproduction_command": "curl -sI http://{target}/",
+        "verification_test": "curl -sI https://{target}/ | grep -E '(Content-Security-Policy|X-Frame-Options|X-Content-Type-Options)'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_004fcade6791",
+      "asset_id": "asset_ef89f514553a",
+      "target": "preview.owasp-juice.shop",
+      "type": "cors_wildcard_misconfiguration",
+      "severity": "medium",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "vulnerability-analysis",
+      "summary": "Overly permissive Cross-Origin Resource Sharing (CORS) policy at https://preview.owasp-juice.shop/: Access-Control-Allow-Origin is set to '*' (CWE-346, CWE-942)",
+      "evidence": [
+        {
+          "evidence_id": "evid_130b391dfafe",
+          "source_tool": "web_crawler",
+          "artifact_path": "https://preview.owasp-juice.shop/",
+          "hash": "4db778bc47dec9ac4e217683249fa22a9c3067e8ddc923cea7764dbc2c8223e3",
+          "timestamp": "2026-10-31T19:59:27+00:00",
+          "excerpt": "url=https://preview.owasp-juice.shop/; Access-Control-Allow-Origin=*",
+          "verification_method": "deterministic_header_audit"
+        },
+        {
+          "evidence_id": "evid_632cc07b9f59",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "20e78901b8a62c76dda0c0251c4f3a9f18422aea09e5810851f44aa791177375",
+          "timestamp": "2026-10-31T20:00:49+00:00",
+          "excerpt": "Permissive CORS Access-Control-Allow-Origin wildcard verified in HTTP response headers",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Overly Permissive Cross-Origin Resource Sharing (CORS) Policy",
+        "summary": "Replace the wildcard '*' with an explicit whitelist of approved origins. Do not reflect the request Origin header blindly.",
+        "plain_english": "The web server responds with Access-Control-Allow-Origin: *, allowing arbitrary external websites to read API responses and interact cross-origin via a victim's browser (CWE-346). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: medium] Unauthorized data exfiltration, CSRF facilitation, and disclosure of authenticated payloads to third-party domains.",
+        "remediation_patch": "```nginx\n# Strict Origin whitelist in Nginx\nmap $http_origin $allowed_origin {\n    default '';\n    'https://trusted-domain.com' $http_origin;\n}\n\nserver {\n    add_header Access-Control-Allow-Origin $allowed_origin always;\n    add_header Access-Control-Allow-Methods 'GET, POST, OPTIONS' always;\n}\n```",
+        "cwe_id": "CWE-346 (Origin Validation Error) / CWE-942",
+        "cvss_score": "6.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:N/A:N",
+        "threat_vector": "Cross-Origin Data Theft via Client Browser",
+        "reproduction_command": "curl -I -H 'Origin: https://evil.com' {target}",
+        "verification_test": "curl -I -H 'Origin: https://evil.com' {target} | grep -i 'Access-Control-Allow-Origin: *'",
+        "references": []
+      }
+    }
+  ],
+  "captured_flags": [],
+  "attack_paths": [
+    {
+      "score": 0.9,
+      "hop_count": 1,
+      "edges": [
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_deda1316f64a",
+          "technique": "BINARY_DAEMON_PROBE",
+          "confidence": "high",
+          "evidence_id": "evid_dda2766578eb"
+        }
+      ]
+    },
+    {
+      "score": 0.9,
+      "hop_count": 1,
+      "edges": [
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_bdfd6440244c",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_a7ff0818dbef"
+        }
+      ]
+    },
+    {
+      "score": 0.9,
+      "hop_count": 1,
+      "edges": [
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_0040c8940be7",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_b0f79b1efc03"
+        }
+      ]
+    },
+    {
+      "score": 0.9,
+      "hop_count": 1,
+      "edges": [
+        {
+          "source": "asset_bdfd6440244c",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_b292d15aaed5"
+        }
+      ]
+    },
+    {
+      "score": 0.9,
+      "hop_count": 1,
+      "edges": [
+        {
+          "source": "asset_78a3dc80c918",
+          "target": "asset_deda1316f64a",
+          "technique": "BINARY_DAEMON_PROBE",
+          "confidence": "high",
+          "evidence_id": "evid_410a241f2dcc"
+        }
+      ]
+    },
+    {
+      "score": 0.9,
+      "hop_count": 1,
+      "edges": [
+        {
+          "source": "asset_78a3dc80c918",
+          "target": "asset_bdfd6440244c",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_a7ff0818dbef"
+        }
+      ]
+    },
+    {
+      "score": 0.9,
+      "hop_count": 1,
+      "edges": [
+        {
+          "source": "asset_0040c8940be7",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_8e948011b704"
+        }
+      ]
+    },
+    {
+      "score": 0.9,
+      "hop_count": 1,
+      "edges": [
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_c5f8f52b351a",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_5759f8fc9f52"
+        }
+      ]
+    },
+    {
+      "score": 0.9,
+      "hop_count": 1,
+      "edges": [
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_78a3dc80c918",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_1ef49f223926"
+        }
+      ]
+    },
+    {
+      "score": 0.81,
+      "hop_count": 2,
+      "edges": [
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_0040c8940be7",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_b0f79b1efc03"
+        },
+        {
+          "source": "asset_0040c8940be7",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_8e948011b704"
+        }
+      ]
+    },
+    {
+      "score": 0.81,
+      "hop_count": 2,
+      "edges": [
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_bdfd6440244c",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_a7ff0818dbef"
+        },
+        {
+          "source": "asset_bdfd6440244c",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_b292d15aaed5"
+        }
+      ]
+    },
+    {
+      "score": 0.81,
+      "hop_count": 2,
+      "edges": [
+        {
+          "source": "asset_bdfd6440244c",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_b292d15aaed5"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_c5f8f52b351a",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_5759f8fc9f52"
+        }
+      ]
+    },
+    {
+      "score": 0.81,
+      "hop_count": 2,
+      "edges": [
+        {
+          "source": "asset_bdfd6440244c",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_b292d15aaed5"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_78a3dc80c918",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_1ef49f223926"
+        }
+      ]
+    },
+    {
+      "score": 0.81,
+      "hop_count": 2,
+      "edges": [
+        {
+          "source": "asset_78a3dc80c918",
+          "target": "asset_bdfd6440244c",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_a7ff0818dbef"
+        },
+        {
+          "source": "asset_bdfd6440244c",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_b292d15aaed5"
+        }
+      ]
+    },
+    {
+      "score": 0.81,
+      "hop_count": 2,
+      "edges": [
+        {
+          "source": "asset_0040c8940be7",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_8e948011b704"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_c5f8f52b351a",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_5759f8fc9f52"
+        }
+      ]
+    },
+    {
+      "score": 0.81,
+      "hop_count": 2,
+      "edges": [
+        {
+          "source": "asset_0040c8940be7",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_8e948011b704"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_78a3dc80c918",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_1ef49f223926"
+        }
+      ]
+    },
+    {
+      "score": 0.81,
+      "hop_count": 2,
+      "edges": [
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_c5f8f52b351a",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_5759f8fc9f52"
+        },
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_deda1316f64a",
+          "technique": "BINARY_DAEMON_PROBE",
+          "confidence": "high",
+          "evidence_id": "evid_dda2766578eb"
+        }
+      ]
+    },
+    {
+      "score": 0.81,
+      "hop_count": 2,
+      "edges": [
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_78a3dc80c918",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_1ef49f223926"
+        },
+        {
+          "source": "asset_78a3dc80c918",
+          "target": "asset_deda1316f64a",
+          "technique": "BINARY_DAEMON_PROBE",
+          "confidence": "high",
+          "evidence_id": "evid_410a241f2dcc"
+        }
+      ]
+    },
+    {
+      "score": 0.81,
+      "hop_count": 2,
+      "edges": [
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_c5f8f52b351a",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_5759f8fc9f52"
+        },
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_bdfd6440244c",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_a7ff0818dbef"
+        }
+      ]
+    },
+    {
+      "score": 0.81,
+      "hop_count": 2,
+      "edges": [
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_78a3dc80c918",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_1ef49f223926"
+        },
+        {
+          "source": "asset_78a3dc80c918",
+          "target": "asset_bdfd6440244c",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_a7ff0818dbef"
+        }
+      ]
+    },
+    {
+      "score": 0.81,
+      "hop_count": 2,
+      "edges": [
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_c5f8f52b351a",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_5759f8fc9f52"
+        },
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_0040c8940be7",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_b0f79b1efc03"
+        }
+      ]
+    },
+    {
+      "score": 0.7290000000000001,
+      "hop_count": 3,
+      "edges": [
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_0040c8940be7",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_b0f79b1efc03"
+        },
+        {
+          "source": "asset_0040c8940be7",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_8e948011b704"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_78a3dc80c918",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_1ef49f223926"
+        }
+      ]
+    },
+    {
+      "score": 0.7290000000000001,
+      "hop_count": 3,
+      "edges": [
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_bdfd6440244c",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_a7ff0818dbef"
+        },
+        {
+          "source": "asset_bdfd6440244c",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_b292d15aaed5"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_78a3dc80c918",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_1ef49f223926"
+        }
+      ]
+    },
+    {
+      "score": 0.7290000000000001,
+      "hop_count": 3,
+      "edges": [
+        {
+          "source": "asset_bdfd6440244c",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_b292d15aaed5"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_c5f8f52b351a",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_5759f8fc9f52"
+        },
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_deda1316f64a",
+          "technique": "BINARY_DAEMON_PROBE",
+          "confidence": "high",
+          "evidence_id": "evid_dda2766578eb"
+        }
+      ]
+    },
+    {
+      "score": 0.7290000000000001,
+      "hop_count": 3,
+      "edges": [
+        {
+          "source": "asset_bdfd6440244c",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_b292d15aaed5"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_78a3dc80c918",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_1ef49f223926"
+        },
+        {
+          "source": "asset_78a3dc80c918",
+          "target": "asset_deda1316f64a",
+          "technique": "BINARY_DAEMON_PROBE",
+          "confidence": "high",
+          "evidence_id": "evid_410a241f2dcc"
+        }
+      ]
+    },
+    {
+      "score": 0.7290000000000001,
+      "hop_count": 3,
+      "edges": [
+        {
+          "source": "asset_bdfd6440244c",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_b292d15aaed5"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_c5f8f52b351a",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_5759f8fc9f52"
+        },
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_0040c8940be7",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_b0f79b1efc03"
+        }
+      ]
+    },
+    {
+      "score": 0.7290000000000001,
+      "hop_count": 3,
+      "edges": [
+        {
+          "source": "asset_78a3dc80c918",
+          "target": "asset_bdfd6440244c",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_a7ff0818dbef"
+        },
+        {
+          "source": "asset_bdfd6440244c",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_b292d15aaed5"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_c5f8f52b351a",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_5759f8fc9f52"
+        }
+      ]
+    },
+    {
+      "score": 0.7290000000000001,
+      "hop_count": 3,
+      "edges": [
+        {
+          "source": "asset_0040c8940be7",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_8e948011b704"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_c5f8f52b351a",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_5759f8fc9f52"
+        },
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_deda1316f64a",
+          "technique": "BINARY_DAEMON_PROBE",
+          "confidence": "high",
+          "evidence_id": "evid_dda2766578eb"
+        }
+      ]
+    },
+    {
+      "score": 0.7290000000000001,
+      "hop_count": 3,
+      "edges": [
+        {
+          "source": "asset_0040c8940be7",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_8e948011b704"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_78a3dc80c918",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_1ef49f223926"
+        },
+        {
+          "source": "asset_78a3dc80c918",
+          "target": "asset_deda1316f64a",
+          "technique": "BINARY_DAEMON_PROBE",
+          "confidence": "high",
+          "evidence_id": "evid_410a241f2dcc"
+        }
+      ]
+    },
+    {
+      "score": 0.7290000000000001,
+      "hop_count": 3,
+      "edges": [
+        {
+          "source": "asset_0040c8940be7",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_8e948011b704"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_c5f8f52b351a",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_5759f8fc9f52"
+        },
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_bdfd6440244c",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_a7ff0818dbef"
+        }
+      ]
+    },
+    {
+      "score": 0.7290000000000001,
+      "hop_count": 3,
+      "edges": [
+        {
+          "source": "asset_0040c8940be7",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_8e948011b704"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_78a3dc80c918",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_1ef49f223926"
+        },
+        {
+          "source": "asset_78a3dc80c918",
+          "target": "asset_bdfd6440244c",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_a7ff0818dbef"
+        }
+      ]
+    },
+    {
+      "score": 0.6561000000000001,
+      "hop_count": 4,
+      "edges": [
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_0040c8940be7",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_b0f79b1efc03"
+        },
+        {
+          "source": "asset_0040c8940be7",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_8e948011b704"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_78a3dc80c918",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_1ef49f223926"
+        },
+        {
+          "source": "asset_78a3dc80c918",
+          "target": "asset_deda1316f64a",
+          "technique": "BINARY_DAEMON_PROBE",
+          "confidence": "high",
+          "evidence_id": "evid_410a241f2dcc"
+        }
+      ]
+    },
+    {
+      "score": 0.6561000000000001,
+      "hop_count": 4,
+      "edges": [
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_bdfd6440244c",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_a7ff0818dbef"
+        },
+        {
+          "source": "asset_bdfd6440244c",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_b292d15aaed5"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_78a3dc80c918",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_1ef49f223926"
+        },
+        {
+          "source": "asset_78a3dc80c918",
+          "target": "asset_deda1316f64a",
+          "technique": "BINARY_DAEMON_PROBE",
+          "confidence": "high",
+          "evidence_id": "evid_410a241f2dcc"
+        }
+      ]
+    },
+    {
+      "score": 0.6561000000000001,
+      "hop_count": 4,
+      "edges": [
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_0040c8940be7",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_b0f79b1efc03"
+        },
+        {
+          "source": "asset_0040c8940be7",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_8e948011b704"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_78a3dc80c918",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_1ef49f223926"
+        },
+        {
+          "source": "asset_78a3dc80c918",
+          "target": "asset_bdfd6440244c",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_a7ff0818dbef"
+        }
+      ]
+    },
+    {
+      "score": 0.6561000000000001,
+      "hop_count": 4,
+      "edges": [
+        {
+          "source": "asset_78a3dc80c918",
+          "target": "asset_bdfd6440244c",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_a7ff0818dbef"
+        },
+        {
+          "source": "asset_bdfd6440244c",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_b292d15aaed5"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_c5f8f52b351a",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_5759f8fc9f52"
+        },
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_deda1316f64a",
+          "technique": "BINARY_DAEMON_PROBE",
+          "confidence": "high",
+          "evidence_id": "evid_dda2766578eb"
+        }
+      ]
+    },
+    {
+      "score": 0.6561000000000001,
+      "hop_count": 4,
+      "edges": [
+        {
+          "source": "asset_78a3dc80c918",
+          "target": "asset_bdfd6440244c",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_a7ff0818dbef"
+        },
+        {
+          "source": "asset_bdfd6440244c",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_b292d15aaed5"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_c5f8f52b351a",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_5759f8fc9f52"
+        },
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_0040c8940be7",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_b0f79b1efc03"
+        }
+      ]
+    }
+  ],
+  "metrics": {
+    "scope_safety_out_of_bounds_probes": 0,
+    "scope_decisions_allowed": 90,
+    "scope_decisions_denied": 0,
+    "total_assets_discovered": 3,
+    "total_services_discovered": 4,
+    "total_findings": 13,
+    "confirmed_findings": 13,
+    "verification_rate_pct": 100.0,
+    "false_alarm_rate_pct": 0.0,
+    "runtime_seconds": 92.0,
+    "autonomy_interventions": 0
+  },
+  "severity_counts": {
+    "critical": 0,
+    "high": 0,
+    "medium": 9,
+    "low": 4,
+    "info": 0
+  }
+}

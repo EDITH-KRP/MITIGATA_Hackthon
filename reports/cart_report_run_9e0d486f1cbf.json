@@ -1,0 +1,1731 @@
+{
+  "run_metadata": {
+    "run_id": "run_9e0d486f1cbf",
+    "status": "completed",
+    "tier": "deep",
+    "started_at": "2026-10-31T19:42:34+00:00",
+    "completed_at": "2026-10-31T19:44:08+00:00",
+    "scope_version": "scope_7f54a10ee159"
+  },
+  "executive_summary": "Autonomous PTES assessment run run_9e0d486f1cbf (COMPLETED) discovered 5 asset(s) and 4 open service(s). Identified 17 finding(s) with 17 confirmed by deterministic playbooks. Severity distribution: 0 Critical, 7 High, 7 Medium, 3 Low. Scope safety enforced 0 out-of-scope denials with 0 safety leaks.",
+  "scope_manifest": {
+    "version": "scope_7f54a10ee159",
+    "prefixes": [
+      "81.169.145.156/32"
+    ],
+    "hosts": [
+      "81.169.145.156"
+    ],
+    "exclusions": [],
+    "binary_hashes": {
+      "target_binaries\\keykeeper": "bbea9ba6cbe6facd9fd96d98cd99c9689d145d2c3c31cea6e44ca73461e48f1f",
+      "target_binaries\\vuln_auth_daemon.elf": "874ab0d9c1f3afba3742bfa15013e882874f9ebff35b5effe682856101c1902d"
+    },
+    "created_by": "ui-launcher",
+    "locked_at": "2026-10-31T19:42:34+00:00"
+  },
+  "inventory": [
+    {
+      "asset_id": "asset_266cce862475",
+      "type": "binary",
+      "canonical_key": "target_binaries\\keykeeper",
+      "first_seen": "2026-10-31T19:42:34+00:00",
+      "last_seen": "2026-10-31T19:42:34+00:00",
+      "services": []
+    },
+    {
+      "asset_id": "asset_25a0759bf8b0",
+      "type": "binary",
+      "canonical_key": "target_binaries\\vuln_auth_daemon.elf",
+      "first_seen": "2026-10-31T19:42:34+00:00",
+      "last_seen": "2026-10-31T19:42:34+00:00",
+      "services": []
+    },
+    {
+      "asset_id": "asset_6485ec90968f",
+      "type": "host",
+      "canonical_key": "81.169.145.156",
+      "first_seen": "2026-10-31T19:43:20+00:00",
+      "last_seen": "2026-10-31T19:44:08+00:00",
+      "services": [
+        {
+          "port": 21,
+          "protocol": "tcp",
+          "name": "tcpwrapped",
+          "banner": "",
+          "state": "open"
+        },
+        {
+          "port": 80,
+          "protocol": "tcp",
+          "name": "http",
+          "banner": "",
+          "state": "open"
+        },
+        {
+          "port": 443,
+          "protocol": "tcp",
+          "name": "https",
+          "banner": "",
+          "state": "open"
+        },
+        {
+          "port": 8080,
+          "protocol": "tcp",
+          "name": "http-proxy",
+          "banner": "",
+          "state": "open"
+        }
+      ]
+    },
+    {
+      "asset_id": "asset_f4246a38a7e4",
+      "type": "web_app",
+      "canonical_key": "81.169.145.156",
+      "first_seen": "2026-10-31T19:43:21+00:00",
+      "last_seen": "2026-10-31T19:43:21+00:00",
+      "services": []
+    },
+    {
+      "asset_id": "asset_8fbe99647117",
+      "type": "web_app",
+      "canonical_key": "preview.owasp-juice.shop",
+      "first_seen": "2026-10-31T19:42:34+00:00",
+      "last_seen": "2026-10-31T19:42:34+00:00",
+      "services": []
+    }
+  ],
+  "findings": [
+    {
+      "finding_id": "find_6f086e866440",
+      "asset_id": "asset_25a0759bf8b0",
+      "target": "target_binaries\\vuln_auth_daemon.elf",
+      "type": "binary_hardcoded_credential",
+      "severity": "medium",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Binary vuln_auth_daemon.elf [0x6372]: 1 string(s) matching 'hardcoded_credential' pattern. Examples: ['password=admin_secret_token_2026']",
+      "evidence": [
+        {
+          "evidence_id": "evid_54daddf2b07c",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_auth_daemon.elf",
+          "hash": "874ab0d9c1f3afba3742bfa15013e882874f9ebff35b5effe682856101c1902d",
+          "timestamp": "2026-10-31T19:42:34+00:00",
+          "excerpt": "[\"password=admin_secret_token_2026\"]",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_c7988e71764f",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "0adbdf3e4f3e687bef2f18a43db4541cb0b3d4654d68600e2cd935911014ef18",
+          "timestamp": "2026-10-31T19:43:53+00:00",
+          "excerpt": "String matching hardcoded-credential pattern ('password=') found in binary",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Hard-coded credential in binary",
+        "summary": "Do not compile secrets into binaries. Read them from environment variables at startup, or fetch them at runtime from a secret manager / key vault (e.g. HashiCorp Vault, AWS Secrets Manager, Azure Key Vault) with short-lived leases. Rotate the exposed credential immediately and audit its usage history.",
+        "plain_english": "A password, token or API key was embedded directly in the binary. Anyone who obtains the file can extract it \u2014 strings utilities retrieve embedded secrets in seconds. This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: medium] Credential theft leading to unauthorised access to the systems or services that accept this secret, and no easy rotation path. The exposed password grants direct login until rotated.",
+        "remediation_patch": "```python\n# BEFORE: PASSWORD = \"Sup3rS3cret!\"   # baked into the file\n# AFTER: read from environment or a secret manager\nimport os\nPASSWORD = os.environ.get('APP_PASSWORD')\nif not PASSWORD:\n    raise RuntimeError('APP_PASSWORD not set; refusing to start')\n\n# Preferred: short-lived lease from a vault\n# secret = vault_client.read_latest('kv/credentials/app')\n```",
+        "cwe_id": "CWE-798 (Use of Hard-coded Credentials)",
+        "cvss_score": "8.2",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:L/A:N",
+        "threat_vector": "Reverse Engineering / Static Secret Extraction",
+        "reproduction_command": "strings -a target_binary | grep -E '(password|auth|secret|admin)'",
+        "verification_test": "strings -a target_binary | grep -i 'secret' || echo 'Clean binary'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_dbe3b2b91e7f",
+      "asset_id": "asset_25a0759bf8b0",
+      "target": "target_binaries\\vuln_auth_daemon.elf",
+      "type": "ctf_planted_flag",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Planted CTF flag captured in binary vuln_auth_daemon.elf strings: ['flag{CyberForge_Live_Binary_Analysis_2026}']",
+      "evidence": [
+        {
+          "evidence_id": "evid_d8628ff8f390",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_auth_daemon.elf",
+          "hash": "874ab0d9c1f3afba3742bfa15013e882874f9ebff35b5effe682856101c1902d",
+          "timestamp": "2026-10-31T19:42:34+00:00",
+          "excerpt": "[\"flag{CyberForge_Live_Binary_Analysis_2026}\"]",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_9e01a69d30ea",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "d2bf37c706ec02a9721ed0170ccb2365e6b79c70b53500f5f97a30bdf0c118f6",
+          "timestamp": "2026-10-31T19:43:53+00:00",
+          "excerpt": "Planted CTF flag literal confirmed in evidence",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Planted CTF flag captured",
+        "summary": "Record the capture in the run report (flag already confirmed as evidence). Then revoke whatever access leaked the flag early and rotate the flag value if uniqueness matters.",
+        "plain_english": "One of the competition's planted flags was recovered by the assessment: the host exposed the flag value where the scanner could read it (page body, HTML comment, HTTP header or binary strings). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Confirms the intended challenge path is solvable. If the flag is visible to unauthenticated crawlers it may also be leaked to untrusted users, revoking the challenge's difficulty.",
+        "remediation_patch": "```nginx\n# BEFORE: flag served to everyone in an HTML comment\n# <!-- flag{some-secret} -->\n\n# AFTER: flag endpoint gated behind the intended exploit marker\nlocation = /flag.txt {\n    deny all;                     # default deny\n    # 192.168.13.37 = lab scoring proxy / authenticated session\n    allow 192.168.13.37;\n    satisfy all;\n}\n```\nOperator actions: (1) log the capture in the run report, (2) revoke public read access to the leaking location, (3) rotate the flag value in the scoring system.",
+        "cwe_id": "CWE-200 (Exposure of Sensitive Information) / CWE-532",
+        "cvss_score": "7.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+        "threat_vector": "Direct Object Exfiltration / Privilege Token Harvest",
+        "reproduction_command": "curl -s http://{target}/path_with_flag",
+        "verification_test": "curl -s http://{target}/path_with_flag | grep -v 'flag{'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_ec024baf74b5",
+      "asset_id": "asset_25a0759bf8b0",
+      "target": "target_binaries\\vuln_auth_daemon.elf",
+      "type": "binary_unsafe_function",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "medium",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Binary vuln_auth_daemon.elf [0x6372]: unsafe C function 'strcpy' found. Unbounded string copy prone to stack buffer overflow (CWE-120). Matched strings: ['strcpy']",
+      "evidence": [
+        {
+          "evidence_id": "evid_287ffe2834d1",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_auth_daemon.elf",
+          "hash": "874ab0d9c1f3afba3742bfa15013e882874f9ebff35b5effe682856101c1902d",
+          "timestamp": "2026-10-31T19:42:34+00:00",
+          "excerpt": "{\"function\": \"strcpy\", \"matches\": [\"strcpy\"]}",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_75b36cd6b002",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "08e6d506d2dce192651d4a95697d027e940f17e44a4a55cb1938d58c14ab389a",
+          "timestamp": "2026-10-31T19:43:53+00:00",
+          "excerpt": "Unsafe function 'strcpy' confirmed in static analysis output",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Dangerous libc function use in binary",
+        "summary": "Replace the unsafe calls: strcpy -> strlcpy/strncpy (or use snprintf), gets -> fgets with an explicit buffer limit, sprintf -> snprintf, strcat -> strlcat/snprintf, and popen/system -> exec-variants that take an argument array after allow-listing the command. Rebuild with warnings (-Wall -Wextra) and compiler hardening (-fstack-protector-strong, FORTIFY_SOURCE) enabled.",
+        "plain_english": "The analysed binary contains one or more dangerous libc functions. These functions perform no bounds checking, so an attacker who controls their input can overflow buffers, corrupt memory or execute commands. This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Buffer overflows leading to crashes (denial of service) or remote code execution with the privileges of the binary.",
+        "remediation_patch": "```c\n- `strcpy`: /* strcpy -> bounded copy: */\nchar dest[BUF_SIZE];\nstrncpy(dest, input, sizeof(dest) - 1);\ndest[sizeof(dest) - 1] = '\\0';  /* or use strlcpy */\n```",
+        "cwe_id": "CWE-120 (Classic Buffer Overflow) / CWE-676 (Dangerous Function)",
+        "cvss_score": "9.8",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        "threat_vector": "Local / Remote Binary Exploitation / Control Flow Hijacking",
+        "reproduction_command": "python3 -c \"print('A'*512)\" | ./binary",
+        "verification_test": "nm -D target_binary | grep -E '(gets|strcpy|sprintf|system)' || echo 'No unsafe symbols'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_ce46cf5261a2",
+      "asset_id": "asset_25a0759bf8b0",
+      "target": "target_binaries\\vuln_auth_daemon.elf",
+      "type": "binary_unsafe_function",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "medium",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Binary vuln_auth_daemon.elf [0x6372]: unsafe C function 'gets' found. Inherently dangerous input function with no length limit (CWE-242). Matched strings: ['gets']",
+      "evidence": [
+        {
+          "evidence_id": "evid_58f2316f5b53",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_auth_daemon.elf",
+          "hash": "874ab0d9c1f3afba3742bfa15013e882874f9ebff35b5effe682856101c1902d",
+          "timestamp": "2026-10-31T19:42:34+00:00",
+          "excerpt": "{\"function\": \"gets\", \"matches\": [\"gets\"]}",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_c33ce568b164",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "44ecdc4f3e986bf7600c78a1051445c71b3067a86b870bb9af692ec3d304dfc1",
+          "timestamp": "2026-10-31T19:43:53+00:00",
+          "excerpt": "Unsafe function 'gets' confirmed in static analysis output",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Dangerous libc function use in binary",
+        "summary": "Replace the unsafe calls: strcpy -> strlcpy/strncpy (or use snprintf), gets -> fgets with an explicit buffer limit, sprintf -> snprintf, strcat -> strlcat/snprintf, and popen/system -> exec-variants that take an argument array after allow-listing the command. Rebuild with warnings (-Wall -Wextra) and compiler hardening (-fstack-protector-strong, FORTIFY_SOURCE) enabled.",
+        "plain_english": "The analysed binary contains one or more dangerous libc functions. These functions perform no bounds checking, so an attacker who controls their input can overflow buffers, corrupt memory or execute commands. This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Buffer overflows leading to crashes (denial of service) or remote code execution with the privileges of the binary.",
+        "remediation_patch": "```c\n- `gets`: /* gets -> fgets with explicit limit (gets is unfixable): */\nchar buf[BUF_SIZE];\nif (fgets(buf, sizeof(buf), stdin) == NULL) { return -1; }\n```",
+        "cwe_id": "CWE-120 (Classic Buffer Overflow) / CWE-676 (Dangerous Function)",
+        "cvss_score": "9.8",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        "threat_vector": "Local / Remote Binary Exploitation / Control Flow Hijacking",
+        "reproduction_command": "python3 -c \"print('A'*512)\" | ./binary",
+        "verification_test": "nm -D target_binary | grep -E '(gets|strcpy|sprintf|system)' || echo 'No unsafe symbols'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_8a225744b813",
+      "asset_id": "asset_25a0759bf8b0",
+      "target": "target_binaries\\vuln_auth_daemon.elf",
+      "type": "binary_unsafe_function",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "medium",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Binary vuln_auth_daemon.elf [0x6372]: unsafe C function 'sprintf' found. Format string / buffer overflow vulnerability (CWE-134). Matched strings: ['sprintf']",
+      "evidence": [
+        {
+          "evidence_id": "evid_2fdcc96e0ad5",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_auth_daemon.elf",
+          "hash": "874ab0d9c1f3afba3742bfa15013e882874f9ebff35b5effe682856101c1902d",
+          "timestamp": "2026-10-31T19:42:34+00:00",
+          "excerpt": "{\"function\": \"sprintf\", \"matches\": [\"sprintf\"]}",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_0e33da969675",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "db19d51ca62ffebd369d869da8fbe78db1b8f7f85d442b987a0fc74476459f74",
+          "timestamp": "2026-10-31T19:43:53+00:00",
+          "excerpt": "Unsafe function 'sprintf' confirmed in static analysis output",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Dangerous libc function use in binary",
+        "summary": "Replace the unsafe calls: strcpy -> strlcpy/strncpy (or use snprintf), gets -> fgets with an explicit buffer limit, sprintf -> snprintf, strcat -> strlcat/snprintf, and popen/system -> exec-variants that take an argument array after allow-listing the command. Rebuild with warnings (-Wall -Wextra) and compiler hardening (-fstack-protector-strong, FORTIFY_SOURCE) enabled.",
+        "plain_english": "The analysed binary contains one or more dangerous libc functions. These functions perform no bounds checking, so an attacker who controls their input can overflow buffers, corrupt memory or execute commands. This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Buffer overflows leading to crashes (denial of service) or remote code execution with the privileges of the binary.",
+        "remediation_patch": "```c\n- `sprintf`: /* sprintf -> snprintf (bounds + format control): */\nsnprintf(buf, sizeof(buf), \"Hello %s\", name);\n```",
+        "cwe_id": "CWE-120 (Classic Buffer Overflow) / CWE-676 (Dangerous Function)",
+        "cvss_score": "9.8",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        "threat_vector": "Local / Remote Binary Exploitation / Control Flow Hijacking",
+        "reproduction_command": "python3 -c \"print('A'*512)\" | ./binary",
+        "verification_test": "nm -D target_binary | grep -E '(gets|strcpy|sprintf|system)' || echo 'No unsafe symbols'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_1610015d2076",
+      "asset_id": "asset_25a0759bf8b0",
+      "target": "target_binaries\\vuln_auth_daemon.elf",
+      "type": "binary_unsafe_function",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "medium",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Binary vuln_auth_daemon.elf [0x6372]: unsafe C function 'system' found. Command injection vulnerability if user input reaches argument (CWE-78). Matched strings: ['system']",
+      "evidence": [
+        {
+          "evidence_id": "evid_0e0f12a98115",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_auth_daemon.elf",
+          "hash": "874ab0d9c1f3afba3742bfa15013e882874f9ebff35b5effe682856101c1902d",
+          "timestamp": "2026-10-31T19:42:34+00:00",
+          "excerpt": "{\"function\": \"system\", \"matches\": [\"system\"]}",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_8bd8b8254e33",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "bbf231c9521adaa54e0b53ceed1fa500928fbdad52d1c8ef4748bdb4ac725241",
+          "timestamp": "2026-10-31T19:43:53+00:00",
+          "excerpt": "Unsafe function 'system' confirmed in static analysis output",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Dangerous libc function use in binary",
+        "summary": "Replace the unsafe calls: strcpy -> strlcpy/strncpy (or use snprintf), gets -> fgets with an explicit buffer limit, sprintf -> snprintf, strcat -> strlcat/snprintf, and popen/system -> exec-variants that take an argument array after allow-listing the command. Rebuild with warnings (-Wall -Wextra) and compiler hardening (-fstack-protector-strong, FORTIFY_SOURCE) enabled.",
+        "plain_english": "The analysed binary contains one or more dangerous libc functions. These functions perform no bounds checking, so an attacker who controls their input can overflow buffers, corrupt memory or execute commands. This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Buffer overflows leading to crashes (denial of service) or remote code execution with the privileges of the binary.",
+        "remediation_patch": "```c\n- `system`: /* system -> allow-list + exec with argument array: */\nif (!allowed_command(user_cmd)) return -1;\npid_t pid = fork();\nif (pid == 0) {\n    execv(\"/usr/bin/allowed\", argv);\n    _exit(127);\n}\n```",
+        "cwe_id": "CWE-120 (Classic Buffer Overflow) / CWE-676 (Dangerous Function)",
+        "cvss_score": "9.8",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        "threat_vector": "Local / Remote Binary Exploitation / Control Flow Hijacking",
+        "reproduction_command": "python3 -c \"print('A'*512)\" | ./binary",
+        "verification_test": "nm -D target_binary | grep -E '(gets|strcpy|sprintf|system)' || echo 'No unsafe symbols'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_8017da0b06a4",
+      "asset_id": "asset_25a0759bf8b0",
+      "target": "target_binaries\\vuln_auth_daemon.elf",
+      "type": "binary_unsafe_function",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "medium",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Binary vuln_auth_daemon.elf [0x6372]: unsafe C function 'popen' found. Process execution prone to command injection (CWE-78). Matched strings: ['popen']",
+      "evidence": [
+        {
+          "evidence_id": "evid_350400a1214d",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_auth_daemon.elf",
+          "hash": "874ab0d9c1f3afba3742bfa15013e882874f9ebff35b5effe682856101c1902d",
+          "timestamp": "2026-10-31T19:42:34+00:00",
+          "excerpt": "{\"function\": \"popen\", \"matches\": [\"popen\"]}",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_0fb795b467f2",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "e4defc40a517fabedb7cd13cf08f5ce0062644de1ed419f95454a2d7bc094056",
+          "timestamp": "2026-10-31T19:43:53+00:00",
+          "excerpt": "Unsafe function 'popen' confirmed in static analysis output",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Dangerous libc function use in binary",
+        "summary": "Replace the unsafe calls: strcpy -> strlcpy/strncpy (or use snprintf), gets -> fgets with an explicit buffer limit, sprintf -> snprintf, strcat -> strlcat/snprintf, and popen/system -> exec-variants that take an argument array after allow-listing the command. Rebuild with warnings (-Wall -Wextra) and compiler hardening (-fstack-protector-strong, FORTIFY_SOURCE) enabled.",
+        "plain_english": "The analysed binary contains one or more dangerous libc functions. These functions perform no bounds checking, so an attacker who controls their input can overflow buffers, corrupt memory or execute commands. This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Buffer overflows leading to crashes (denial of service) or remote code execution with the privileges of the binary.",
+        "remediation_patch": "```c\n- `popen`: /* popen -> static command + execv (no shell metacharacters): */\nint pipefd[2];\npipe(pipefd);\npid_t pid = fork();\nif (pid == 0) {\n    dup2(pipefd[1], STDOUT_FILENO);\n    execv(\"/usr/bin/needed\", argv);  /* argv is fixed, not user text */\n    _exit(127);\n}\n```",
+        "cwe_id": "CWE-120 (Classic Buffer Overflow) / CWE-676 (Dangerous Function)",
+        "cvss_score": "9.8",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        "threat_vector": "Local / Remote Binary Exploitation / Control Flow Hijacking",
+        "reproduction_command": "python3 -c \"print('A'*512)\" | ./binary",
+        "verification_test": "nm -D target_binary | grep -E '(gets|strcpy|sprintf|system)' || echo 'No unsafe symbols'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_6b9491789a5f",
+      "asset_id": "asset_25a0759bf8b0",
+      "target": "target_binaries\\vuln_auth_daemon.elf",
+      "type": "binary_unsafe_function",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "medium",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Binary vuln_auth_daemon.elf [0x6372]: unsafe C function 'strcat' found. Unbounded string concatenation prone to buffer overflow (CWE-120). Matched strings: ['strcat']",
+      "evidence": [
+        {
+          "evidence_id": "evid_9b9776caf929",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_auth_daemon.elf",
+          "hash": "874ab0d9c1f3afba3742bfa15013e882874f9ebff35b5effe682856101c1902d",
+          "timestamp": "2026-10-31T19:42:34+00:00",
+          "excerpt": "{\"function\": \"strcat\", \"matches\": [\"strcat\"]}",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_419ee5ab4354",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "85fce69d4254a0525a43897310710817b26aa14dc793513a831bcf6f1b05414f",
+          "timestamp": "2026-10-31T19:43:53+00:00",
+          "excerpt": "Unsafe function 'strcat' confirmed in static analysis output",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Dangerous libc function use in binary",
+        "summary": "Replace the unsafe calls: strcpy -> strlcpy/strncpy (or use snprintf), gets -> fgets with an explicit buffer limit, sprintf -> snprintf, strcat -> strlcat/snprintf, and popen/system -> exec-variants that take an argument array after allow-listing the command. Rebuild with warnings (-Wall -Wextra) and compiler hardening (-fstack-protector-strong, FORTIFY_SOURCE) enabled.",
+        "plain_english": "The analysed binary contains one or more dangerous libc functions. These functions perform no bounds checking, so an attacker who controls their input can overflow buffers, corrupt memory or execute commands. This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Buffer overflows leading to crashes (denial of service) or remote code execution with the privileges of the binary.",
+        "remediation_patch": "```c\n- `strcat`: /* strcat -> strlcat or bounded snprintf: */\nsnprintf(dst, sizeof(dst), \"%s%s\", dst, src);\n```",
+        "cwe_id": "CWE-120 (Classic Buffer Overflow) / CWE-676 (Dangerous Function)",
+        "cvss_score": "9.8",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        "threat_vector": "Local / Remote Binary Exploitation / Control Flow Hijacking",
+        "reproduction_command": "python3 -c \"print('A'*512)\" | ./binary",
+        "verification_test": "nm -D target_binary | grep -E '(gets|strcpy|sprintf|system)' || echo 'No unsafe symbols'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_709fe7865c28",
+      "asset_id": "asset_6485ec90968f",
+      "target": "81.169.145.156",
+      "type": "unencrypted_cleartext_service",
+      "severity": "medium",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "vulnerability-analysis",
+      "summary": "Unencrypted cleartext service exposed on port 21/tcp (tcpwrapped) without TLS encryption (CWE-319)",
+      "evidence": [
+        {
+          "evidence_id": "evid_4a94aafeb52d",
+          "source_tool": "nmap",
+          "artifact_path": "81.169.145.156:21",
+          "hash": "621bafa254f302952a8d66663bd6da9a72d4534292dda8c18b582c6fb74b1478",
+          "timestamp": "2026-10-31T19:43:20+00:00",
+          "excerpt": "port=21; protocol=tcp; service=tcpwrapped; banner=",
+          "verification_method": "nmap_service_probe"
+        },
+        {
+          "evidence_id": "evid_c4499086ebe4",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "ee70d02dbc2f269eb8d687ec2fcd9eeb957adccf3967667d26e7d3f33fb1f503",
+          "timestamp": "2026-10-31T19:43:54+00:00",
+          "excerpt": "Unencrypted TCP listening service confirmed by network scan",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Unencrypted Cleartext Network Service",
+        "summary": "Terminate TLS using a reverse proxy (e.g. Nginx, HAProxy) or enable TLS natively.",
+        "plain_english": "A network service is communicating without Transport Layer Security (TLS/SSL). Traffic sent to or from this service is in cleartext and readable by network observers (CWE-319). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: medium] Eavesdropping and credential theft on transit networks.",
+        "remediation_patch": "```nginx\n# Terminate TLS with modern ciphers\nserver {\n    listen 443 ssl;\n    ssl_certificate /etc/ssl/certs/cert.pem;\n    ssl_certificate_key /etc/ssl/private/key.pem;\n}\n```",
+        "cwe_id": "CWE-319 (Cleartext Transmission of Sensitive Information)",
+        "cvss_score": "7.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+        "threat_vector": "Adjacent Network / Remote Eavesdropping (Man-in-the-Middle)",
+        "reproduction_command": "curl -v http://{target}:{port}/",
+        "verification_test": "curl -v --fail --tlsv1.3 https://{target}:{port}/",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_13c409d76fb4",
+      "asset_id": "asset_6485ec90968f",
+      "target": "81.169.145.156",
+      "type": "unencrypted_cleartext_service",
+      "severity": "medium",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "vulnerability-analysis",
+      "summary": "Unencrypted cleartext service exposed on port 80/tcp (http) without TLS encryption (CWE-319)",
+      "evidence": [
+        {
+          "evidence_id": "evid_3e8b3ab32f6b",
+          "source_tool": "nmap",
+          "artifact_path": "81.169.145.156:80",
+          "hash": "509d2d3850ac90c85327dd5803bc948a433170fe2e0fa7aaef954adc722f4b8b",
+          "timestamp": "2026-10-31T19:43:20+00:00",
+          "excerpt": "port=80; protocol=tcp; service=http; banner=",
+          "verification_method": "nmap_service_probe"
+        },
+        {
+          "evidence_id": "evid_1626202d6ef5",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "ee70d02dbc2f269eb8d687ec2fcd9eeb957adccf3967667d26e7d3f33fb1f503",
+          "timestamp": "2026-10-31T19:43:54+00:00",
+          "excerpt": "Unencrypted TCP listening service confirmed by network scan",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Unencrypted Cleartext Network Service",
+        "summary": "Terminate TLS using a reverse proxy (e.g. Nginx, HAProxy) or enable TLS natively.",
+        "plain_english": "A network service is communicating without Transport Layer Security (TLS/SSL). Traffic sent to or from this service is in cleartext and readable by network observers (CWE-319). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: medium] Eavesdropping and credential theft on transit networks.",
+        "remediation_patch": "```nginx\n# Terminate TLS with modern ciphers\nserver {\n    listen 443 ssl;\n    ssl_certificate /etc/ssl/certs/cert.pem;\n    ssl_certificate_key /etc/ssl/private/key.pem;\n}\n```",
+        "cwe_id": "CWE-319 (Cleartext Transmission of Sensitive Information)",
+        "cvss_score": "7.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+        "threat_vector": "Adjacent Network / Remote Eavesdropping (Man-in-the-Middle)",
+        "reproduction_command": "curl -v http://{target}:{port}/",
+        "verification_test": "curl -v --fail --tlsv1.3 https://{target}:{port}/",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_fd064013f238",
+      "asset_id": "asset_6485ec90968f",
+      "target": "81.169.145.156",
+      "type": "unencrypted_cleartext_service",
+      "severity": "medium",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "vulnerability-analysis",
+      "summary": "Unencrypted cleartext service exposed on port 8080/tcp (http-proxy) without TLS encryption (CWE-319)",
+      "evidence": [
+        {
+          "evidence_id": "evid_9e07bab55b38",
+          "source_tool": "nmap",
+          "artifact_path": "81.169.145.156:8080",
+          "hash": "cccc71b2113e5314aba54c1db2606687329e82ee68a88492eeac89274f5c26d5",
+          "timestamp": "2026-10-31T19:43:20+00:00",
+          "excerpt": "port=8080; protocol=tcp; service=http-proxy; banner=",
+          "verification_method": "nmap_service_probe"
+        },
+        {
+          "evidence_id": "evid_f69cc403498e",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "ee70d02dbc2f269eb8d687ec2fcd9eeb957adccf3967667d26e7d3f33fb1f503",
+          "timestamp": "2026-10-31T19:43:54+00:00",
+          "excerpt": "Unencrypted TCP listening service confirmed by network scan",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Unencrypted Cleartext Network Service",
+        "summary": "Terminate TLS using a reverse proxy (e.g. Nginx, HAProxy) or enable TLS natively.",
+        "plain_english": "A network service is communicating without Transport Layer Security (TLS/SSL). Traffic sent to or from this service is in cleartext and readable by network observers (CWE-319). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: medium] Eavesdropping and credential theft on transit networks.",
+        "remediation_patch": "```nginx\n# Terminate TLS with modern ciphers\nserver {\n    listen 443 ssl;\n    ssl_certificate /etc/ssl/certs/cert.pem;\n    ssl_certificate_key /etc/ssl/private/key.pem;\n}\n```",
+        "cwe_id": "CWE-319 (Cleartext Transmission of Sensitive Information)",
+        "cvss_score": "7.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+        "threat_vector": "Adjacent Network / Remote Eavesdropping (Man-in-the-Middle)",
+        "reproduction_command": "curl -v http://{target}:{port}/",
+        "verification_test": "curl -v --fail --tlsv1.3 https://{target}:{port}/",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_f20c174e730d",
+      "asset_id": "asset_6485ec90968f",
+      "target": "81.169.145.156",
+      "type": "non_standard_service_port",
+      "severity": "low",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Non-standard network service port 8080/tcp (http-proxy) exposed directly on target (CWE-657)",
+      "evidence": [
+        {
+          "evidence_id": "evid_e8d1d65be475",
+          "source_tool": "nmap",
+          "artifact_path": "81.169.145.156:8080",
+          "hash": "21244d069604ad379e4c896ff67ab7e56d08d69b4c5aa47406a588a58e56fb35",
+          "timestamp": "2026-10-31T19:43:20+00:00",
+          "excerpt": "port=8080; protocol=tcp; service_name=http-proxy",
+          "verification_method": "nmap_port_scan"
+        },
+        {
+          "evidence_id": "evid_8b00fb4bf292",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "f11f70fde2d134d84cf550e1d399151d06d896d2fcbbbcdc3ade7544f6e7f101",
+          "timestamp": "2026-10-31T19:43:54+00:00",
+          "excerpt": "Non-standard listening port exposure confirmed by network scanner",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Direct Exposure of Non-Standard Network Port",
+        "summary": "Bind the service to localhost 127.0.0.1 or restrict access via host firewall.",
+        "plain_english": "A listening service is running on an unexpected, non-standard TCP port (CWE-657). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: low] Expands network attack surface and bypasses standard reverse proxy protections.",
+        "remediation_patch": "```bash\n# Restrict access with UFW firewall\nsudo ufw default deny incoming\nsudo ufw allow from 192.168.60.0/24 to any port 80 proto tcp\n```",
+        "cwe_id": "CWE-200 (Exposure of Sensitive Information)",
+        "cvss_score": "5.3",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+        "threat_vector": "Remote Network / Service Fingerprinting",
+        "reproduction_command": "nc -zv {target} {port}",
+        "verification_test": "nmap -sT -p {port} {target} -oG - | grep -i closed",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_61b6b1f8b1b9",
+      "asset_id": "asset_8fbe99647117",
+      "target": "preview.owasp-juice.shop",
+      "type": "missing_security_headers",
+      "severity": "medium",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "vulnerability-analysis",
+      "summary": "Critical HTTP security headers missing at https://preview.owasp-juice.shop/: Content-Security-Policy, Strict-Transport-Security (CWE-1021, CWE-693, CWE-16)",
+      "evidence": [
+        {
+          "evidence_id": "evid_b5f449d8cced",
+          "source_tool": "web_crawler",
+          "artifact_path": "https://preview.owasp-juice.shop/",
+          "hash": "471bd180de4708abd96ba18a55947efe10dbadc428411a29f3bb1215389612a4",
+          "timestamp": "2026-10-31T19:42:34+00:00",
+          "excerpt": "{\"missing\": [\"Content-Security-Policy\", \"Strict-Transport-Security\"], \"url\": \"https://preview.owasp-juice.shop/\"}",
+          "verification_method": "deterministic_header_audit"
+        },
+        {
+          "evidence_id": "evid_5878128e99d6",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "050383e65a71ea90f255ec626cc7a71219c673d4f3f4fc5ec86e7a6a64e757e0",
+          "timestamp": "2026-10-31T19:43:53+00:00",
+          "excerpt": "Absence of critical HTTP defensive headers confirmed against web server",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Missing HTTP Security Defense Headers",
+        "summary": "Configure the web server to emit Content-Security-Policy, X-Frame-Options: DENY, and X-Content-Type-Options: nosniff.",
+        "plain_english": "The web server does not send critical HTTP defensive headers (Content-Security-Policy, X-Frame-Options, X-Content-Type-Options). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: medium] Leaves users exposed to Clickjacking (UI redressing), MIME confusion attacks, and Cross-Site Scripting (XSS).",
+        "remediation_patch": "```nginx\nadd_header X-Frame-Options \"DENY\" always;\nadd_header X-Content-Type-Options \"nosniff\" always;\nadd_header Content-Security-Policy \"default-src 'self'\" always;\n```",
+        "cwe_id": "CWE-693 (Protection Mechanism Failure)",
+        "cvss_score": "6.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:L/A:N",
+        "threat_vector": "Clickjacking / MIME Sniffing / Cross-Site Scripting",
+        "reproduction_command": "curl -sI http://{target}/",
+        "verification_test": "curl -sI https://{target}/ | grep -E '(Content-Security-Policy|X-Frame-Options|X-Content-Type-Options)'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_bfdfa46f1f74",
+      "asset_id": "asset_f4246a38a7e4",
+      "target": "81.169.145.156",
+      "type": "missing_security_headers",
+      "severity": "medium",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "vulnerability-analysis",
+      "summary": "Critical HTTP security headers missing at http://81.169.145.156/: Content-Security-Policy, X-Frame-Options, X-Content-Type-Options: nosniff (CWE-1021, CWE-693, CWE-16)",
+      "evidence": [
+        {
+          "evidence_id": "evid_c17af46e13b7",
+          "source_tool": "web_crawler",
+          "artifact_path": "http://81.169.145.156/",
+          "hash": "6a362ee42d827ddf3e0f2d3c18927dd88fad9c9b66fa7c2f41d80b355a2c067a",
+          "timestamp": "2026-10-31T19:43:21+00:00",
+          "excerpt": "{\"missing\": [\"Content-Security-Policy\", \"X-Frame-Options\", \"X-Content-Type-Options: nosniff\"], \"url\": \"http://81.169.145.156/\"}",
+          "verification_method": "deterministic_header_audit"
+        },
+        {
+          "evidence_id": "evid_2519ff7bf3af",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "050383e65a71ea90f255ec626cc7a71219c673d4f3f4fc5ec86e7a6a64e757e0",
+          "timestamp": "2026-10-31T19:43:54+00:00",
+          "excerpt": "Absence of critical HTTP defensive headers confirmed against web server",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Missing HTTP Security Defense Headers",
+        "summary": "Configure the web server to emit Content-Security-Policy, X-Frame-Options: DENY, and X-Content-Type-Options: nosniff.",
+        "plain_english": "The web server does not send critical HTTP defensive headers (Content-Security-Policy, X-Frame-Options, X-Content-Type-Options). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: medium] Leaves users exposed to Clickjacking (UI redressing), MIME confusion attacks, and Cross-Site Scripting (XSS).",
+        "remediation_patch": "```nginx\nadd_header X-Frame-Options \"DENY\" always;\nadd_header X-Content-Type-Options \"nosniff\" always;\nadd_header Content-Security-Policy \"default-src 'self'\" always;\n```",
+        "cwe_id": "CWE-693 (Protection Mechanism Failure)",
+        "cvss_score": "6.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:L/A:N",
+        "threat_vector": "Clickjacking / MIME Sniffing / Cross-Site Scripting",
+        "reproduction_command": "curl -sI http://{target}/",
+        "verification_test": "curl -sI https://{target}/ | grep -E '(Content-Security-Policy|X-Frame-Options|X-Content-Type-Options)'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_46a438f3dceb",
+      "asset_id": "asset_f4246a38a7e4",
+      "target": "81.169.145.156",
+      "type": "server_banner_disclosure",
+      "severity": "low",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Software version disclosure in HTTP headers at http://81.169.145.156/: Server: Apache/2.4.69 (Unix) (CWE-200)",
+      "evidence": [
+        {
+          "evidence_id": "evid_f0129c0b94e0",
+          "source_tool": "web_crawler",
+          "artifact_path": "http://81.169.145.156/",
+          "hash": "bba63c3686e351dbf2af784a1194b8db66296ca414a89be6e591b736d00c9d59",
+          "timestamp": "2026-10-31T19:43:21+00:00",
+          "excerpt": "url=http://81.169.145.156/; Server: Apache/2.4.69 (Unix)",
+          "verification_method": "deterministic_header_audit"
+        },
+        {
+          "evidence_id": "evid_28157e4849ec",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "653d0e8996aff6574e8063958f034e7efdb607ad71eb4e647f913b860b709a62",
+          "timestamp": "2026-10-31T19:43:54+00:00",
+          "excerpt": "Granular software version banner confirmed in server HTTP headers",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Detailed Software Version Disclosure",
+        "summary": "Suppress server version banners in web server configuration.",
+        "plain_english": "HTTP response headers expose specific product and version numbers (e.g., Server, X-Powered-By), assisting attackers in targeting known CVEs (CWE-200). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: low] Reconnaissance advantage for attackers seeking version-specific exploits.",
+        "remediation_patch": "```nginx\nserver_tokens off;\n```",
+        "cwe_id": "CWE-200 (Exposure of Software Version Information)",
+        "cvss_score": "5.3",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+        "threat_vector": "Automated Exploit Targeting / CVE Mapping",
+        "reproduction_command": "curl -sI http://{target}/ | grep -i Server",
+        "verification_test": "curl -sI https://{target}/ | grep -v -i 'Server: [a-zA-Z]'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_7711425a30b9",
+      "asset_id": "asset_f4246a38a7e4",
+      "target": "81.169.145.156",
+      "type": "missing_security_headers",
+      "severity": "medium",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "vulnerability-analysis",
+      "summary": "Critical HTTP security headers missing at http://81.169.145.156:8080/: Content-Security-Policy, X-Frame-Options, X-Content-Type-Options: nosniff (CWE-1021, CWE-693, CWE-16)",
+      "evidence": [
+        {
+          "evidence_id": "evid_079831a3879b",
+          "source_tool": "web_crawler",
+          "artifact_path": "http://81.169.145.156:8080/",
+          "hash": "4eaa4866eee287b8c7badad03b27f633ba5a8818f487d0dfd492d9f55299d122",
+          "timestamp": "2026-10-31T19:43:21+00:00",
+          "excerpt": "{\"missing\": [\"Content-Security-Policy\", \"X-Frame-Options\", \"X-Content-Type-Options: nosniff\"], \"url\": \"http://81.169.145.156:8080/\"}",
+          "verification_method": "deterministic_header_audit"
+        },
+        {
+          "evidence_id": "evid_0c179a00cec0",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "050383e65a71ea90f255ec626cc7a71219c673d4f3f4fc5ec86e7a6a64e757e0",
+          "timestamp": "2026-10-31T19:43:54+00:00",
+          "excerpt": "Absence of critical HTTP defensive headers confirmed against web server",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Missing HTTP Security Defense Headers",
+        "summary": "Configure the web server to emit Content-Security-Policy, X-Frame-Options: DENY, and X-Content-Type-Options: nosniff.",
+        "plain_english": "The web server does not send critical HTTP defensive headers (Content-Security-Policy, X-Frame-Options, X-Content-Type-Options). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: medium] Leaves users exposed to Clickjacking (UI redressing), MIME confusion attacks, and Cross-Site Scripting (XSS).",
+        "remediation_patch": "```nginx\nadd_header X-Frame-Options \"DENY\" always;\nadd_header X-Content-Type-Options \"nosniff\" always;\nadd_header Content-Security-Policy \"default-src 'self'\" always;\n```",
+        "cwe_id": "CWE-693 (Protection Mechanism Failure)",
+        "cvss_score": "6.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:L/A:N",
+        "threat_vector": "Clickjacking / MIME Sniffing / Cross-Site Scripting",
+        "reproduction_command": "curl -sI http://{target}/",
+        "verification_test": "curl -sI https://{target}/ | grep -E '(Content-Security-Policy|X-Frame-Options|X-Content-Type-Options)'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_1391a36d702d",
+      "asset_id": "asset_f4246a38a7e4",
+      "target": "81.169.145.156",
+      "type": "server_banner_disclosure",
+      "severity": "low",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Software version disclosure in HTTP headers at http://81.169.145.156:8080/: Server: Apache/2.4.69 (Unix) (CWE-200)",
+      "evidence": [
+        {
+          "evidence_id": "evid_7f40251e2114",
+          "source_tool": "web_crawler",
+          "artifact_path": "http://81.169.145.156:8080/",
+          "hash": "1d7911683dd480c73385cf43472be2c2cfd9e49da56eb8a9f32ea48dd8108229",
+          "timestamp": "2026-10-31T19:43:21+00:00",
+          "excerpt": "url=http://81.169.145.156:8080/; Server: Apache/2.4.69 (Unix)",
+          "verification_method": "deterministic_header_audit"
+        },
+        {
+          "evidence_id": "evid_b58dacb64358",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "653d0e8996aff6574e8063958f034e7efdb607ad71eb4e647f913b860b709a62",
+          "timestamp": "2026-10-31T19:43:54+00:00",
+          "excerpt": "Granular software version banner confirmed in server HTTP headers",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Detailed Software Version Disclosure",
+        "summary": "Suppress server version banners in web server configuration.",
+        "plain_english": "HTTP response headers expose specific product and version numbers (e.g., Server, X-Powered-By), assisting attackers in targeting known CVEs (CWE-200). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: low] Reconnaissance advantage for attackers seeking version-specific exploits.",
+        "remediation_patch": "```nginx\nserver_tokens off;\n```",
+        "cwe_id": "CWE-200 (Exposure of Software Version Information)",
+        "cvss_score": "5.3",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+        "threat_vector": "Automated Exploit Targeting / CVE Mapping",
+        "reproduction_command": "curl -sI http://{target}/ | grep -i Server",
+        "verification_test": "curl -sI https://{target}/ | grep -v -i 'Server: [a-zA-Z]'",
+        "references": []
+      }
+    }
+  ],
+  "captured_flags": [
+    {
+      "finding_id": "find_dbe3b2b91e7f",
+      "asset_id": "asset_25a0759bf8b0",
+      "target": "target_binaries\\vuln_auth_daemon.elf",
+      "type": "ctf_planted_flag",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Planted CTF flag captured in binary vuln_auth_daemon.elf strings: ['flag{CyberForge_Live_Binary_Analysis_2026}']",
+      "evidence": [
+        {
+          "evidence_id": "evid_d8628ff8f390",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_auth_daemon.elf",
+          "hash": "874ab0d9c1f3afba3742bfa15013e882874f9ebff35b5effe682856101c1902d",
+          "timestamp": "2026-10-31T19:42:34+00:00",
+          "excerpt": "[\"flag{CyberForge_Live_Binary_Analysis_2026}\"]",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_9e01a69d30ea",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "d2bf37c706ec02a9721ed0170ccb2365e6b79c70b53500f5f97a30bdf0c118f6",
+          "timestamp": "2026-10-31T19:43:53+00:00",
+          "excerpt": "Planted CTF flag literal confirmed in evidence",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Planted CTF flag captured",
+        "summary": "Record the capture in the run report (flag already confirmed as evidence). Then revoke whatever access leaked the flag early and rotate the flag value if uniqueness matters.",
+        "plain_english": "One of the competition's planted flags was recovered by the assessment: the host exposed the flag value where the scanner could read it (page body, HTML comment, HTTP header or binary strings). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Confirms the intended challenge path is solvable. If the flag is visible to unauthenticated crawlers it may also be leaked to untrusted users, revoking the challenge's difficulty.",
+        "remediation_patch": "```nginx\n# BEFORE: flag served to everyone in an HTML comment\n# <!-- flag{some-secret} -->\n\n# AFTER: flag endpoint gated behind the intended exploit marker\nlocation = /flag.txt {\n    deny all;                     # default deny\n    # 192.168.13.37 = lab scoring proxy / authenticated session\n    allow 192.168.13.37;\n    satisfy all;\n}\n```\nOperator actions: (1) log the capture in the run report, (2) revoke public read access to the leaking location, (3) rotate the flag value in the scoring system.",
+        "cwe_id": "CWE-200 (Exposure of Sensitive Information) / CWE-532",
+        "cvss_score": "7.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+        "threat_vector": "Direct Object Exfiltration / Privilege Token Harvest",
+        "reproduction_command": "curl -s http://{target}/path_with_flag",
+        "verification_test": "curl -s http://{target}/path_with_flag | grep -v 'flag{'",
+        "references": []
+      }
+    }
+  ],
+  "attack_paths": [
+    {
+      "score": 0.9,
+      "hop_count": 1,
+      "edges": [
+        {
+          "source": "asset_bdfd6440244c",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_b292d15aaed5"
+        }
+      ]
+    },
+    {
+      "score": 0.9,
+      "hop_count": 1,
+      "edges": [
+        {
+          "source": "asset_78a3dc80c918",
+          "target": "asset_bdfd6440244c",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_a7ff0818dbef"
+        }
+      ]
+    },
+    {
+      "score": 0.9,
+      "hop_count": 1,
+      "edges": [
+        {
+          "source": "asset_78a3dc80c918",
+          "target": "asset_deda1316f64a",
+          "technique": "BINARY_DAEMON_PROBE",
+          "confidence": "high",
+          "evidence_id": "evid_410a241f2dcc"
+        }
+      ]
+    },
+    {
+      "score": 0.9,
+      "hop_count": 1,
+      "edges": [
+        {
+          "source": "asset_0040c8940be7",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_8e948011b704"
+        }
+      ]
+    },
+    {
+      "score": 0.9,
+      "hop_count": 1,
+      "edges": [
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_78a3dc80c918",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_1ef49f223926"
+        }
+      ]
+    },
+    {
+      "score": 0.9,
+      "hop_count": 1,
+      "edges": [
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_c5f8f52b351a",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_5759f8fc9f52"
+        }
+      ]
+    },
+    {
+      "score": 0.9,
+      "hop_count": 1,
+      "edges": [
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_bdfd6440244c",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_a7ff0818dbef"
+        }
+      ]
+    },
+    {
+      "score": 0.9,
+      "hop_count": 1,
+      "edges": [
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_0040c8940be7",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_b0f79b1efc03"
+        }
+      ]
+    },
+    {
+      "score": 0.9,
+      "hop_count": 1,
+      "edges": [
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_deda1316f64a",
+          "technique": "BINARY_DAEMON_PROBE",
+          "confidence": "high",
+          "evidence_id": "evid_dda2766578eb"
+        }
+      ]
+    },
+    {
+      "score": 0.81,
+      "hop_count": 2,
+      "edges": [
+        {
+          "source": "asset_bdfd6440244c",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_b292d15aaed5"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_78a3dc80c918",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_1ef49f223926"
+        }
+      ]
+    },
+    {
+      "score": 0.81,
+      "hop_count": 2,
+      "edges": [
+        {
+          "source": "asset_bdfd6440244c",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_b292d15aaed5"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_c5f8f52b351a",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_5759f8fc9f52"
+        }
+      ]
+    },
+    {
+      "score": 0.81,
+      "hop_count": 2,
+      "edges": [
+        {
+          "source": "asset_78a3dc80c918",
+          "target": "asset_bdfd6440244c",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_a7ff0818dbef"
+        },
+        {
+          "source": "asset_bdfd6440244c",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_b292d15aaed5"
+        }
+      ]
+    },
+    {
+      "score": 0.81,
+      "hop_count": 2,
+      "edges": [
+        {
+          "source": "asset_0040c8940be7",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_8e948011b704"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_78a3dc80c918",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_1ef49f223926"
+        }
+      ]
+    },
+    {
+      "score": 0.81,
+      "hop_count": 2,
+      "edges": [
+        {
+          "source": "asset_0040c8940be7",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_8e948011b704"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_c5f8f52b351a",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_5759f8fc9f52"
+        }
+      ]
+    },
+    {
+      "score": 0.81,
+      "hop_count": 2,
+      "edges": [
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_c5f8f52b351a",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_5759f8fc9f52"
+        },
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_bdfd6440244c",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_a7ff0818dbef"
+        }
+      ]
+    },
+    {
+      "score": 0.81,
+      "hop_count": 2,
+      "edges": [
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_78a3dc80c918",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_1ef49f223926"
+        },
+        {
+          "source": "asset_78a3dc80c918",
+          "target": "asset_bdfd6440244c",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_a7ff0818dbef"
+        }
+      ]
+    },
+    {
+      "score": 0.81,
+      "hop_count": 2,
+      "edges": [
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_c5f8f52b351a",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_5759f8fc9f52"
+        },
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_0040c8940be7",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_b0f79b1efc03"
+        }
+      ]
+    },
+    {
+      "score": 0.81,
+      "hop_count": 2,
+      "edges": [
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_c5f8f52b351a",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_5759f8fc9f52"
+        },
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_deda1316f64a",
+          "technique": "BINARY_DAEMON_PROBE",
+          "confidence": "high",
+          "evidence_id": "evid_dda2766578eb"
+        }
+      ]
+    },
+    {
+      "score": 0.81,
+      "hop_count": 2,
+      "edges": [
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_78a3dc80c918",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_1ef49f223926"
+        },
+        {
+          "source": "asset_78a3dc80c918",
+          "target": "asset_deda1316f64a",
+          "technique": "BINARY_DAEMON_PROBE",
+          "confidence": "high",
+          "evidence_id": "evid_410a241f2dcc"
+        }
+      ]
+    },
+    {
+      "score": 0.81,
+      "hop_count": 2,
+      "edges": [
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_0040c8940be7",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_b0f79b1efc03"
+        },
+        {
+          "source": "asset_0040c8940be7",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_8e948011b704"
+        }
+      ]
+    },
+    {
+      "score": 0.81,
+      "hop_count": 2,
+      "edges": [
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_bdfd6440244c",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_a7ff0818dbef"
+        },
+        {
+          "source": "asset_bdfd6440244c",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_b292d15aaed5"
+        }
+      ]
+    },
+    {
+      "score": 0.7290000000000001,
+      "hop_count": 3,
+      "edges": [
+        {
+          "source": "asset_bdfd6440244c",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_b292d15aaed5"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_c5f8f52b351a",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_5759f8fc9f52"
+        },
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_0040c8940be7",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_b0f79b1efc03"
+        }
+      ]
+    },
+    {
+      "score": 0.7290000000000001,
+      "hop_count": 3,
+      "edges": [
+        {
+          "source": "asset_bdfd6440244c",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_b292d15aaed5"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_c5f8f52b351a",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_5759f8fc9f52"
+        },
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_deda1316f64a",
+          "technique": "BINARY_DAEMON_PROBE",
+          "confidence": "high",
+          "evidence_id": "evid_dda2766578eb"
+        }
+      ]
+    },
+    {
+      "score": 0.7290000000000001,
+      "hop_count": 3,
+      "edges": [
+        {
+          "source": "asset_bdfd6440244c",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_b292d15aaed5"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_78a3dc80c918",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_1ef49f223926"
+        },
+        {
+          "source": "asset_78a3dc80c918",
+          "target": "asset_deda1316f64a",
+          "technique": "BINARY_DAEMON_PROBE",
+          "confidence": "high",
+          "evidence_id": "evid_410a241f2dcc"
+        }
+      ]
+    },
+    {
+      "score": 0.7290000000000001,
+      "hop_count": 3,
+      "edges": [
+        {
+          "source": "asset_78a3dc80c918",
+          "target": "asset_bdfd6440244c",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_a7ff0818dbef"
+        },
+        {
+          "source": "asset_bdfd6440244c",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_b292d15aaed5"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_c5f8f52b351a",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_5759f8fc9f52"
+        }
+      ]
+    },
+    {
+      "score": 0.7290000000000001,
+      "hop_count": 3,
+      "edges": [
+        {
+          "source": "asset_0040c8940be7",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_8e948011b704"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_c5f8f52b351a",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_5759f8fc9f52"
+        },
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_bdfd6440244c",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_a7ff0818dbef"
+        }
+      ]
+    },
+    {
+      "score": 0.7290000000000001,
+      "hop_count": 3,
+      "edges": [
+        {
+          "source": "asset_0040c8940be7",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_8e948011b704"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_78a3dc80c918",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_1ef49f223926"
+        },
+        {
+          "source": "asset_78a3dc80c918",
+          "target": "asset_bdfd6440244c",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_a7ff0818dbef"
+        }
+      ]
+    },
+    {
+      "score": 0.7290000000000001,
+      "hop_count": 3,
+      "edges": [
+        {
+          "source": "asset_0040c8940be7",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_8e948011b704"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_c5f8f52b351a",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_5759f8fc9f52"
+        },
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_deda1316f64a",
+          "technique": "BINARY_DAEMON_PROBE",
+          "confidence": "high",
+          "evidence_id": "evid_dda2766578eb"
+        }
+      ]
+    },
+    {
+      "score": 0.7290000000000001,
+      "hop_count": 3,
+      "edges": [
+        {
+          "source": "asset_0040c8940be7",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_8e948011b704"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_78a3dc80c918",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_1ef49f223926"
+        },
+        {
+          "source": "asset_78a3dc80c918",
+          "target": "asset_deda1316f64a",
+          "technique": "BINARY_DAEMON_PROBE",
+          "confidence": "high",
+          "evidence_id": "evid_410a241f2dcc"
+        }
+      ]
+    },
+    {
+      "score": 0.7290000000000001,
+      "hop_count": 3,
+      "edges": [
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_0040c8940be7",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_b0f79b1efc03"
+        },
+        {
+          "source": "asset_0040c8940be7",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_8e948011b704"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_78a3dc80c918",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_1ef49f223926"
+        }
+      ]
+    },
+    {
+      "score": 0.7290000000000001,
+      "hop_count": 3,
+      "edges": [
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_bdfd6440244c",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_a7ff0818dbef"
+        },
+        {
+          "source": "asset_bdfd6440244c",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_b292d15aaed5"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_78a3dc80c918",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_1ef49f223926"
+        }
+      ]
+    },
+    {
+      "score": 0.6561000000000001,
+      "hop_count": 4,
+      "edges": [
+        {
+          "source": "asset_78a3dc80c918",
+          "target": "asset_bdfd6440244c",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_a7ff0818dbef"
+        },
+        {
+          "source": "asset_bdfd6440244c",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_b292d15aaed5"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_c5f8f52b351a",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_5759f8fc9f52"
+        },
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_0040c8940be7",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_b0f79b1efc03"
+        }
+      ]
+    },
+    {
+      "score": 0.6561000000000001,
+      "hop_count": 4,
+      "edges": [
+        {
+          "source": "asset_78a3dc80c918",
+          "target": "asset_bdfd6440244c",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_a7ff0818dbef"
+        },
+        {
+          "source": "asset_bdfd6440244c",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_b292d15aaed5"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_c5f8f52b351a",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_5759f8fc9f52"
+        },
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_deda1316f64a",
+          "technique": "BINARY_DAEMON_PROBE",
+          "confidence": "high",
+          "evidence_id": "evid_dda2766578eb"
+        }
+      ]
+    },
+    {
+      "score": 0.6561000000000001,
+      "hop_count": 4,
+      "edges": [
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_0040c8940be7",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_b0f79b1efc03"
+        },
+        {
+          "source": "asset_0040c8940be7",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_8e948011b704"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_78a3dc80c918",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_1ef49f223926"
+        },
+        {
+          "source": "asset_78a3dc80c918",
+          "target": "asset_bdfd6440244c",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_a7ff0818dbef"
+        }
+      ]
+    },
+    {
+      "score": 0.6561000000000001,
+      "hop_count": 4,
+      "edges": [
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_0040c8940be7",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_b0f79b1efc03"
+        },
+        {
+          "source": "asset_0040c8940be7",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_8e948011b704"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_78a3dc80c918",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_1ef49f223926"
+        },
+        {
+          "source": "asset_78a3dc80c918",
+          "target": "asset_deda1316f64a",
+          "technique": "BINARY_DAEMON_PROBE",
+          "confidence": "high",
+          "evidence_id": "evid_410a241f2dcc"
+        }
+      ]
+    },
+    {
+      "score": 0.6561000000000001,
+      "hop_count": 4,
+      "edges": [
+        {
+          "source": "asset_c5f8f52b351a",
+          "target": "asset_bdfd6440244c",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_a7ff0818dbef"
+        },
+        {
+          "source": "asset_bdfd6440244c",
+          "target": "asset_c7b32b7f5c57",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_b292d15aaed5"
+        },
+        {
+          "source": "asset_c7b32b7f5c57",
+          "target": "asset_78a3dc80c918",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_1ef49f223926"
+        },
+        {
+          "source": "asset_78a3dc80c918",
+          "target": "asset_deda1316f64a",
+          "technique": "BINARY_DAEMON_PROBE",
+          "confidence": "high",
+          "evidence_id": "evid_410a241f2dcc"
+        }
+      ]
+    }
+  ],
+  "metrics": {
+    "scope_safety_out_of_bounds_probes": 0,
+    "scope_decisions_allowed": 17,
+    "scope_decisions_denied": 0,
+    "total_assets_discovered": 5,
+    "total_services_discovered": 4,
+    "total_findings": 17,
+    "confirmed_findings": 17,
+    "verification_rate_pct": 100.0,
+    "false_alarm_rate_pct": 0.0,
+    "runtime_seconds": 94.0,
+    "autonomy_interventions": 0
+  },
+  "severity_counts": {
+    "critical": 0,
+    "high": 7,
+    "medium": 7,
+    "low": 3,
+    "info": 0
+  }
+}

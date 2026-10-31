@@ -1,11 +1,13 @@
-"""Web specialist (spec section 5.6, PRD FR-2).
-
-Crawls permitted in-scope web apps using urllib (stdlib only).
-PolicyGate checks every request URL AND every redirect before following.
-Endpoint/form capture with evidence and provenance.
-"""
-
 from __future__ import annotations
+
+
+def _safe_commit(conn: sqlite3.Connection) -> None:
+    try:
+        if getattr(conn, "in_transaction", True):
+            conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
 
 import hashlib
 import html.parser
@@ -78,6 +80,7 @@ class _LinkParser(html.parser.HTMLParser):
         super().__init__()
         self.base_url = base_url
         self.links: list[str] = []
+        self.scripts: list[str] = []
         self.forms: list[dict] = []
         self._current_form: dict | None = None
 
@@ -86,6 +89,9 @@ class _LinkParser(html.parser.HTMLParser):
         if tag == "a" and attr.get("href"):
             abs_url = urllib.parse.urljoin(self.base_url, attr["href"])
             self.links.append(abs_url)
+        elif tag == "script" and attr.get("src"):
+            script_url = urllib.parse.urljoin(self.base_url, attr["src"])
+            self.scripts.append(script_url)
         elif tag == "form":
             self._current_form = {
                 "action": urllib.parse.urljoin(self.base_url, attr.get("action", "")),
@@ -116,7 +122,7 @@ def _persist_finding(conn: sqlite3.Connection, f: Finding) -> str:
             (f.finding_id, f.asset_id, f.finding_type, f.severity,
              f.status.value, f.confidence, f.ptes_phase, f.summary),
         )
-        conn.commit()
+        _safe_commit(conn)
     except sqlite3.IntegrityError:
         pass
     return f.finding_id
@@ -130,7 +136,7 @@ def _persist_evidence(conn: sqlite3.Connection, e: Evidence) -> None:
             (e.evidence_id, e.finding_id, e.source_tool, e.artifact_path,
              e.hash, e.timestamp, e.excerpt, e.verification_method),
         )
-        conn.commit()
+        _safe_commit(conn)
     except sqlite3.IntegrityError:
         pass
 
@@ -144,7 +150,7 @@ def _persist_tool_event(conn: sqlite3.Connection, event: ToolEvent) -> None:
          event.scope_decision.value, event.started_at, event.finished_at,
          event.exit_status, event.output_hash),
     )
-    conn.commit()
+    _safe_commit(conn)
 
 
 # ---------------------------------------------------------------------------
@@ -178,17 +184,21 @@ class WebWorker:
         Looks up the asset's canonical_key (IP) from the DB, constructs the
         base URL, then BFS-crawls within scope policy.
         """
-        # Resolve asset → IP
-        row = self.conn.execute(
-            "SELECT canonical_key FROM assets WHERE asset_id=?", (task.target_id,)
-        ).fetchone()
-        if row is None:
-            raise ValueError(f"Asset {task.target_id} not found in store")
-        ip = row[0]
-
-        # Prefer a web port discovered and stored by NetworkWorker. This also
-        # supports local lab apps exposed on non-privileged ports such as 8080.
-        base_url = self._detect_base_url(ip, task.target_id)
+        # Resolve asset → IP or direct seed URL
+        if task.target_id.startswith(("http://", "https://")):
+            base_url = task.target_id
+            parsed = urllib.parse.urlparse(base_url)
+            ip = parsed.hostname or base_url
+            all_base_urls = [base_url]
+        else:
+            row = self.conn.execute(
+                "SELECT canonical_key FROM assets WHERE asset_id=?", (task.target_id,)
+            ).fetchone()
+            if row is None:
+                raise ValueError(f"Asset {task.target_id} not found in store")
+            ip = row[0]
+            base_url = self._detect_base_url(ip, task.target_id)
+            all_base_urls = self._detect_all_base_urls(ip, task.target_id)
 
         # SCOPE GATE on base URL before crawl starts
         gate_result = self.gate.gate(base_url, self.run_id, is_url=True)
@@ -205,8 +215,7 @@ class WebWorker:
             event.exit_status = "scope_denied"
             _persist_tool_event(self.conn, event)
             raise PermissionError(f"Scope DENY for {base_url}: {gate_result.reason}")
-
-        endpoints, forms, finding_ids, discovered_binaries = self._crawl(task, base_url, ip)
+        endpoints, forms, finding_ids, discovered_binaries = self._crawl(task, all_base_urls, ip)
 
         event.finished_at = utc_now()
         event.exit_status = "0"
@@ -359,7 +368,7 @@ class WebWorker:
                 (asset.asset_id, asset.run_id, asset.asset_type,
                  asset.canonical_key, asset.first_seen, asset.last_seen),
             )
-            self.conn.commit()
+            _safe_commit(self.conn)
             return asset.asset_id
         except sqlite3.IntegrityError:
             row = self.conn.execute(
@@ -393,17 +402,311 @@ class WebWorker:
 
         return f"http://{ip}/"
 
+    def _detect_all_base_urls(self, ip: str, asset_id: str | None = None) -> list[str]:
+        primary = self._detect_base_url(ip, asset_id)
+        urls = [primary]
+        if asset_id is not None:
+            rows = self.conn.execute(
+                "SELECT protocol, port FROM services WHERE asset_id=? AND state='open'",
+                (asset_id,),
+            ).fetchall()
+            for protocol, port in rows:
+                scheme = "https" if port in {443, 8443} or str(protocol).lower() == "https" else "http"
+                default_port = 443 if scheme == "https" else 80
+                port_part = "" if port == default_port else f":{port}"
+                candidate_url = f"{scheme}://{ip}{port_part}/"
+                if candidate_url not in urls:
+                    urls.append(candidate_url)
+        return urls
+
+    def _emit_finding(
+        self,
+        task: Task,
+        asset_id: str,
+        finding_type: str,
+        severity: str,
+        ptes_phase: PtesPhase,
+        summary: str,
+        artifact_path: str,
+        excerpt: str,
+        confidence: str = "high",
+    ) -> str:
+        finding = Finding(
+            finding_id=new_id("find"),
+            asset_id=asset_id,
+            finding_type=finding_type,
+            severity=severity,
+            status=FindingStatus.CANDIDATE,
+            confidence=confidence,
+            ptes_phase=ptes_phase,
+            summary=summary,
+        )
+        fid = _persist_finding(self.conn, finding)
+        evidence = Evidence(
+            evidence_id=new_id("evid"),
+            finding_id=fid,
+            source_tool="web_crawler",
+            artifact_path=artifact_path,
+            hash=hashlib.sha256(excerpt.encode()).hexdigest(),
+            excerpt=excerpt[:500],
+            verification_method="deterministic_header_audit",
+        )
+        _persist_evidence(self.conn, evidence)
+        return fid
+
+    def _audit_security_headers(
+        self,
+        task: Task,
+        asset_ip: str,
+        page_url: str,
+        headers: dict[str, str],
+        status_code: int = 200,
+    ) -> list[str]:
+        fids = []
+        asset_id = self._get_or_create_asset("web_app", asset_ip)
+
+        # 1. Cleartext HTTP Basic Authentication
+        www_auth = headers.get("WWW-Authenticate", "")
+        if www_auth and "basic" in www_auth.lower() and page_url.startswith("http://"):
+            summary = (
+                f"Cleartext HTTP Basic Authentication exposed at {page_url} "
+                f"without TLS encryption (CWE-319): {www_auth}"
+            )
+            fid = self._emit_finding(
+                task, asset_id, "cleartext_http_authentication", "high",
+                PtesPhase.VULNERABILITY_ANALYSIS, summary,
+                page_url, f"status={status_code}; WWW-Authenticate={www_auth}",
+                confidence="high",
+            )
+            fids.append(fid)
+
+        # 2. Insecure Cookie Attributes (Missing HttpOnly / SameSite)
+        set_cookie = headers.get("Set-Cookie", "")
+        if set_cookie:
+            raw_lower = set_cookie.lower()
+            issues = []
+            if "httponly" not in raw_lower:
+                issues.append("missing HttpOnly (vulnerable to XSS theft)")
+            if "samesite" not in raw_lower:
+                issues.append("missing SameSite attribute (susceptible to CSRF)")
+            if page_url.startswith("https://") and "secure" not in raw_lower:
+                issues.append("missing Secure attribute over HTTPS")
+            if issues:
+                summary = (
+                    f"Insecure cookie attributes on {page_url}: {', '.join(issues)} (CWE-1004)"
+                )
+                fid = self._emit_finding(
+                    task, asset_id, "insecure_cookie_attributes", "medium",
+                    PtesPhase.VULNERABILITY_ANALYSIS, summary,
+                    page_url, f"url={page_url}; Set-Cookie={set_cookie}",
+                    confidence="high",
+                )
+                fids.append(fid)
+
+        # 3. Missing Critical Security Headers
+        missing = []
+        if not headers.get("Content-Security-Policy"):
+            missing.append("Content-Security-Policy")
+        if not headers.get("X-Frame-Options"):
+            missing.append("X-Frame-Options")
+        if not headers.get("X-Content-Type-Options"):
+            missing.append("X-Content-Type-Options: nosniff")
+        if page_url.startswith("https://") and not headers.get("Strict-Transport-Security"):
+            missing.append("Strict-Transport-Security")
+        if missing:
+            summary = (
+                f"Critical HTTP security headers missing at {page_url}: {', '.join(missing)} "
+                "(CWE-1021, CWE-693, CWE-16)"
+            )
+            fid = self._emit_finding(
+                task, asset_id, "missing_security_headers", "medium",
+                PtesPhase.VULNERABILITY_ANALYSIS, summary,
+                page_url, json.dumps({"missing": missing, "url": page_url}),
+                confidence="high",
+            )
+            fids.append(fid)
+
+        # 4. Software Version Disclosure
+        server_hdr = headers.get("Server", "")
+        powered_by = headers.get("X-Powered-By", "")
+        disclosures = []
+        if server_hdr and re.search(r"\d+\.\d+", server_hdr):
+            disclosures.append(f"Server: {server_hdr}")
+        if powered_by:
+            disclosures.append(f"X-Powered-By: {powered_by}")
+        if disclosures:
+            summary = (
+                f"Software version disclosure in HTTP headers at {page_url}: {'; '.join(disclosures)} (CWE-200)"
+            )
+            fid = self._emit_finding(
+                task, asset_id, "server_banner_disclosure", "low",
+                PtesPhase.INTELLIGENCE_GATHERING, summary,
+                page_url, f"url={page_url}; {'; '.join(disclosures)}",
+                confidence="high",
+            )
+            fids.append(fid)
+
+        # 5. Overly Permissive CORS Policy
+        cors_origin = headers.get("Access-Control-Allow-Origin", "")
+        if cors_origin == "*" or (cors_origin and "null" in cors_origin.lower()):
+            summary = (
+                f"Overly permissive Cross-Origin Resource Sharing (CORS) policy at {page_url}: "
+                f"Access-Control-Allow-Origin is set to '{cors_origin}' (CWE-346, CWE-942)"
+            )
+            fid = self._emit_finding(
+                task, asset_id, "cors_wildcard_misconfiguration", "medium",
+                PtesPhase.VULNERABILITY_ANALYSIS, summary,
+                page_url, f"url={page_url}; Access-Control-Allow-Origin={cors_origin}",
+                confidence="high",
+            )
+            fids.append(fid)
+
+        return fids
+
     def _crawl(
-        self, task: Task, base_url: str, asset_ip: str
+        self, task: Task, base_urls: list[str] | str, asset_ip: str
     ) -> tuple[list[str], list[dict], list[str], list[dict]]:
         """BFS crawler. Returns (visited_urls, forms, finding_ids, discovered_binaries)."""
         visited: set[str] = set()
-        queue: deque[str] = deque([base_url])
+        visited_scripts: set[str] = set()
+        queue: deque[str] = deque(base_urls if isinstance(base_urls, list) else [base_urls])
+        seen_audits: set[str] = set()
         all_forms: list[dict] = []
         finding_ids: list[str] = []
         discovered_binaries: list[dict] = []
         timeout = task.budget.get("timeout_s", 180)
         deadline = time.monotonic() + timeout
+
+        # Active reconnaissance for sensitive paths across target roots
+        recon_paths = [
+            "/robots.txt",
+            "/sitemap.xml",
+            "/api/Challenges",
+            "/rest/admin/application-version",
+            "/ftp",
+            "/.env",
+            "/.git/HEAD",
+        ]
+        target_roots: set[str] = set()
+        for b_url in (base_urls if isinstance(base_urls, list) else [base_urls]):
+            p = urllib.parse.urlsplit(b_url)
+            if p.scheme and p.netloc:
+                target_roots.add(f"{p.scheme}://{p.netloc}/")
+
+        for root in target_roots:
+            for p_path in recon_paths:
+                candidate_url = urllib.parse.urljoin(root, p_path.lstrip("/"))
+                gate_res = self.gate.gate(candidate_url, self.run_id, is_url=True)
+                if gate_res.decision is ScopeDecision.DENY:
+                    continue
+
+                try:
+                    p_req = urllib.request.Request(
+                        candidate_url,
+                        headers={"User-Agent": "CART-scanner/0.1 (controlled assessment)"},
+                    )
+                    with urllib.request.urlopen(p_req, timeout=5) as p_resp:
+                        p_code = getattr(p_resp, "status", 200)
+                        if p_code >= 400:
+                            continue
+                        p_ct = p_resp.headers.get("Content-Type", "")
+                        p_body = p_resp.read(65536)
+                        p_text = p_body.decode(errors="replace")
+
+                        # 1. Robots.txt disclosure
+                        if p_path == "/robots.txt":
+                            disallowed = []
+                            for line in p_text.splitlines():
+                                line_clean = line.strip()
+                                if line_clean.lower().startswith("disallow:"):
+                                    parts = line_clean.split(":", 1)
+                                    if len(parts) > 1 and parts[1].strip():
+                                        d_path = parts[1].strip()
+                                        disallowed.append(d_path)
+                                        abs_d = urllib.parse.urljoin(root, d_path.lstrip("/"))
+                                        if abs_d not in visited:
+                                            queue.append(abs_d)
+                            if disallowed:
+                                asset_id = self._get_or_create_asset("web_app", asset_ip)
+                                fid = self._emit_finding(
+                                    task,
+                                    asset_id,
+                                    "robots_txt_disclosure",
+                                    "low",
+                                    PtesPhase.INTELLIGENCE_GATHERING,
+                                    f"Sensitive paths disclosed in robots.txt at {candidate_url}: {', '.join(disallowed[:5])} (CWE-200, CWE-548)",
+                                    candidate_url,
+                                    f"Disallowed paths: {', '.join(disallowed)}",
+                                    confidence="high",
+                                )
+                                finding_ids.append(fid)
+
+                        # 2. Exposed sensitive config or git repo
+                        elif p_path in ("/.env", "/.git/HEAD"):
+                            if "ref: refs/heads" in p_text or any(k in p_text for k in ("DB_", "SECRET", "KEY=", "PASSWORD=")):
+                                asset_id = self._get_or_create_asset("web_app", asset_ip)
+                                fid = self._emit_finding(
+                                    task,
+                                    asset_id,
+                                    "sensitive_file_exposure",
+                                    "high",
+                                    PtesPhase.VULNERABILITY_ANALYSIS,
+                                    f"Publicly accessible sensitive file or VCS repository exposed at {candidate_url} (CWE-552)",
+                                    candidate_url,
+                                    p_text[:200],
+                                    confidence="high",
+                                )
+                                finding_ids.append(fid)
+
+                        # 3. Directory listing / open file storage
+                        elif p_path == "/ftp" or "index of /" in p_text.lower():
+                            asset_id = self._get_or_create_asset("web_app", asset_ip)
+                            fid = self._emit_finding(
+                                task,
+                                asset_id,
+                                "directory_listing_disclosure",
+                                "medium",
+                                PtesPhase.INTELLIGENCE_GATHERING,
+                                f"Directory indexing / open file storage exposed at {candidate_url} (CWE-548)",
+                                candidate_url,
+                                p_text[:200],
+                                confidence="high",
+                            )
+                            finding_ids.append(fid)
+                            parser = _LinkParser(candidate_url)
+                            try:
+                                parser.feed(p_text)
+                                for lk in parser.links:
+                                    if lk not in visited:
+                                        queue.append(lk)
+                            except Exception:  # noqa: BLE001 S110
+                                pass
+
+                        # 4. Unauthenticated JSON API
+                        elif "application/json" in p_ct or p_body.strip().startswith((b"{", b"[")):
+                            if len(p_body.strip()) > 2:
+                                asset_id = self._get_or_create_asset("web_app", asset_ip)
+                                fid = self._emit_finding(
+                                    task,
+                                    asset_id,
+                                    "unauthenticated_api_exposure",
+                                    "medium",
+                                    PtesPhase.VULNERABILITY_ANALYSIS,
+                                    f"Unauthenticated REST API endpoint exposed at {candidate_url} disclosing structured data (CWE-306)",
+                                    candidate_url,
+                                    p_text[:300],
+                                    confidence="high",
+                                )
+                                finding_ids.append(fid)
+
+                        # Flag hunt across probed files
+                        flag_fids = self._scan_page_for_flags(
+                            task, asset_ip, candidate_url, p_text, str(p_resp.headers)
+                        )
+                        finding_ids.extend(flag_fids)
+
+                except (urllib.error.HTTPError, urllib.error.URLError, OSError):
+                    pass
 
         while queue and len(visited) < self.max_pages:
             if time.monotonic() > deadline:
@@ -414,7 +717,7 @@ class WebWorker:
                 continue
 
             # Normalise + scope check every URL before fetching
-            url = self._normalise(url, base_url)
+            url = self._normalise(url, url)
             if not url:
                 continue
 
@@ -447,7 +750,17 @@ class WebWorker:
                             continue
                     content_type = resp.headers.get("Content-Type", "")
                     headers_text = str(resp.headers)
+                    headers_dict = dict(resp.headers)
                     body = resp.read(task.budget.get("max_output", 1 << 20))
+
+                # Audit security headers & cookies once per origin
+                origin = urllib.parse.urlsplit(url).netloc
+                if origin not in seen_audits:
+                    seen_audits.add(origin)
+                    vuln_fids = self._audit_security_headers(
+                        task, asset_ip, url, headers_dict, status_code=getattr(resp, "status", 200)
+                    )
+                    finding_ids.extend(vuln_fids)
 
                 time.sleep(self.request_delay_s)
 
@@ -463,6 +776,37 @@ class WebWorker:
                             queue.append(link)
                     all_forms.extend(parser.forms)
 
+                    # Inspect client script bundles for API routes and flags
+                    for s_url in parser.scripts[:15]:
+                        if s_url in visited_scripts:
+                            continue
+                        visited_scripts.add(s_url)
+                        s_gate = self.gate.gate(s_url, self.run_id, is_url=True)
+                        if s_gate.decision is ScopeDecision.DENY:
+                            continue
+                        try:
+                            s_req = urllib.request.Request(
+                                s_url,
+                                headers={"User-Agent": "CART-scanner/0.1 (controlled assessment)"},
+                            )
+                            with urllib.request.urlopen(s_req, timeout=5) as s_resp:
+                                s_body = s_resp.read(524288)  # up to 512KB
+                                s_text = s_body.decode(errors="replace")
+                                s_flag_fids = self._scan_page_for_flags(
+                                    task, asset_ip, s_url, s_text, str(s_resp.headers)
+                                )
+                                finding_ids.extend(s_flag_fids)
+                                discovered_routes = re.findall(
+                                    r'["\'](/(?:api|rest|v1|v2|ftp|admin|assets|vault)/[a-zA-Z0-9_\-\.\/]+)["\']',
+                                    s_text,
+                                )
+                                for d_route in discovered_routes[:30]:
+                                    abs_route = urllib.parse.urljoin(url, d_route)
+                                    if abs_route not in visited:
+                                        queue.append(abs_route)
+                        except (urllib.error.HTTPError, urllib.error.URLError, OSError):
+                            pass
+
                     # Planted-flag hunt: body, HTML comments, HTTP headers
                     flag_fids = self._scan_page_for_flags(
                         task, asset_ip, url, body_text, headers_text
@@ -474,7 +818,25 @@ class WebWorker:
                         if form["inputs"]:
                             fid = self._emit_form_finding(task, asset_ip, url, form)
                             finding_ids.append(fid)
+                else:
+                    try:
+                        non_html_text = body.decode(errors="replace")
+                        flag_fids = self._scan_page_for_flags(
+                            task, asset_ip, url, non_html_text, headers_text
+                        )
+                        finding_ids.extend(flag_fids)
+                    except Exception:  # noqa: BLE001 S110
+                        pass
 
+            except urllib.error.HTTPError as exc:
+                headers_dict = dict(exc.headers)
+                origin = urllib.parse.urlsplit(url).netloc
+                if origin not in seen_audits:
+                    seen_audits.add(origin)
+                    vuln_fids = self._audit_security_headers(
+                        task, asset_ip, url, headers_dict, status_code=exc.code
+                    )
+                    finding_ids.extend(vuln_fids)
             except (urllib.error.URLError, OSError):
                 pass  # unreachable / timeout — continue crawl
 

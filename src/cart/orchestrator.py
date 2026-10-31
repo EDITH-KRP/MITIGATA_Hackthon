@@ -1,14 +1,13 @@
-"""Bounded task-graph orchestrator (spec sections 5.4, 7, 8).
-
-Design rules:
-- Deterministic code owns scheduling, limits, dedup and state transitions.
-- Bounded fan-out/fan-in. No free-form agent mesh, no unbounded recursion.
-- Tasks go PENDING -> READY -> RUNNING -> SUCCEEDED | FAILED | TIMED_OUT | CANCELLED.
-- Retries only within the task's retry budget and only if idempotent.
-- SQLite-backed: in-memory dict replaced in build-order step 4.
-"""
-
 from __future__ import annotations
+
+
+def _safe_commit(conn: sqlite3.Connection) -> None:
+    try:
+        if getattr(conn, "in_transaction", True):
+            conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
 
 import json
 import sqlite3
@@ -66,7 +65,7 @@ class Orchestrator:
                     json.dumps(task.budget),
                 ),
             )
-            self.conn.commit()
+            _safe_commit(self.conn)
         except sqlite3.IntegrityError:
             # Dedupe key conflict — return the existing task_id
             if task.dedupe_key:
@@ -147,7 +146,7 @@ class Orchestrator:
             "UPDATE tasks SET status = ? WHERE task_id = ?",
             (new_status.value, task_id),
         )
-        self.conn.commit()
+        _safe_commit(self.conn)
 
     def mark_ready(self, task_id: str) -> None:
         self.transition(task_id, TaskStatus.READY)
@@ -168,7 +167,7 @@ class Orchestrator:
                 "UPDATE runs SET status = ? WHERE run_id = ?",
                 (status.value, self.run_id),
             )
-        self.conn.commit()
+        _safe_commit(self.conn)
 
     # ------------------------------------------------------------------
     # Budget-exhaustion handler
@@ -187,7 +186,7 @@ class Orchestrator:
             "UPDATE tasks SET status = ? WHERE status = ?",
             (TaskStatus.TIMED_OUT.value, TaskStatus.RUNNING.value),
         )
-        self.conn.commit()
+        _safe_commit(self.conn)
         self.set_run_status(RunStatus.PARTIAL)
 
     # ------------------------------------------------------------------
@@ -314,7 +313,8 @@ class Orchestrator:
 
         # Final run status
         failed = self.conn.execute(
-            "SELECT COUNT(*) FROM tasks WHERE status IN ('failed','timed_out')"
+            "SELECT COUNT(*) FROM tasks WHERE status IN ('failed','timed_out') AND dedupe_key LIKE ?",
+            (f"{self.run_id}:%",),
         ).fetchone()[0]
         if failed:
             self.set_run_status(RunStatus.PARTIAL)

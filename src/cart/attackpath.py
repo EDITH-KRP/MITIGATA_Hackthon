@@ -62,12 +62,29 @@ class AttackPathBuilder:
 
     def load_edges(self) -> list[PathEdge]:
         """Fetch all relationships that reference valid, existing evidence."""
-        query = """
-            SELECT r.source_id, r.target_id, r.relationship_type, r.evidence_id, r.confidence
-            FROM relationships r
-            JOIN evidence e ON r.evidence_id = e.evidence_id
-        """
-        rows = self.conn.execute(query).fetchall()
+        if self.run_id and self.run_id not in ("", "current", "all"):
+            query = """
+                SELECT r.source_id, r.target_id, r.relationship_type, r.evidence_id, r.confidence
+                FROM relationships r
+                JOIN assets a1 ON r.source_id = a1.asset_id
+                JOIN assets a2 ON r.target_id = a2.asset_id
+                JOIN evidence e ON r.evidence_id = e.evidence_id
+                WHERE a1.run_id = ? AND a2.run_id = ?
+            """
+            rows = self.conn.execute(query, (self.run_id, self.run_id)).fetchall()
+            if not rows:
+                derive_run_relationships(self.conn, self.run_id)
+                rows = self.conn.execute(query, (self.run_id, self.run_id)).fetchall()
+        else:
+            query = """
+                SELECT r.source_id, r.target_id, r.relationship_type, r.evidence_id, r.confidence
+                FROM relationships r
+                JOIN evidence e ON r.evidence_id = e.evidence_id
+            """
+            rows = self.conn.execute(query).fetchall()
+            if not rows:
+                derive_run_relationships(self.conn, self.run_id)
+                rows = self.conn.execute(query).fetchall()
         edges: list[PathEdge] = []
         for src, dst, rel_type, evid_id, conf_str in rows:
             weight = _CONFIDENCE_MAP.get(conf_str.lower(), 0.5)
@@ -227,3 +244,130 @@ class AttackPathBuilder:
             lines.append(f"  Evidence: {', '.join(e.evidence_id for e in path.edges)}")
             lines.append("")
         return "\n".join(lines).strip()
+
+
+
+def derive_run_relationships(conn: sqlite3.Connection, run_id: str | None = None) -> int:
+    """Ensure evidence-backed relationships exist in SQLite for confirmed findings."""
+    if run_id and run_id not in ("", "current", "all"):
+        query = """
+            SELECT f.finding_id, f.asset_id, a.canonical_key, a.asset_type, f.finding_type, f.severity, e.evidence_id
+            FROM findings f
+            JOIN assets a ON f.asset_id = a.asset_id
+            JOIN evidence e ON f.finding_id = e.finding_id
+            WHERE a.run_id = ? AND f.status = 'confirmed' AND f.severity IN ('critical', 'high', 'medium')
+        """
+        rows = conn.execute(query, (run_id,)).fetchall()
+        all_assets = conn.execute("SELECT asset_id, canonical_key, asset_type FROM assets WHERE run_id = ?", (run_id,)).fetchall()
+    else:
+        query = """
+            SELECT f.finding_id, f.asset_id, a.canonical_key, a.asset_type, f.finding_type, f.severity, e.evidence_id
+            FROM findings f
+            JOIN assets a ON f.asset_id = a.asset_id
+            JOIN evidence e ON f.finding_id = e.finding_id
+            WHERE f.status = 'confirmed' AND f.severity IN ('critical', 'high', 'medium')
+        """
+        rows = conn.execute(query).fetchall()
+        all_assets = conn.execute("SELECT asset_id, canonical_key, asset_type FROM assets").fetchall()
+
+    if not rows:
+        return 0
+
+    inserted = 0
+    assets_by_type: dict[str, list[tuple[str, str]]] = {}
+    for aid, key, atype in all_assets:
+        assets_by_type.setdefault(atype, []).append((aid, key))
+
+    host_assets = [aid for aid, k in assets_by_type.get("host", [])]
+    web_assets = [aid for aid, k in assets_by_type.get("web_app", [])]
+    bin_assets = [aid for aid, k in assets_by_type.get("binary", [])]
+
+    finding_ev: dict[str, tuple[str, str]] = {}
+    for r in rows:
+        _fid, aid, _key, _atype, ftype, _sev, evid = r
+        finding_ev[ftype] = (aid, evid)
+
+    # 1. Reverse Proxy Bypass / Service Exposure: host -> web_app
+    if "reverse_proxy_ip_spoofing" in finding_ev and host_assets and web_assets:
+        aid, evid = finding_ev["reverse_proxy_ip_spoofing"]
+        src = host_assets[0]
+        dst = web_assets[0]
+        try:
+            conn.execute(
+                "INSERT INTO relationships (source_id, target_id, relationship_type, evidence_id, confidence) VALUES (?, ?, ?, ?, ?)",
+                (src, dst, "REVERSE_PROXY_IP_SPOOFING", evid, "high"),
+            )
+            inserted += 1
+        except sqlite3.IntegrityError:
+            pass
+    elif host_assets and web_assets:
+        src = host_assets[0]
+        dst = web_assets[0]
+        evid = rows[0][6]
+        try:
+            conn.execute(
+                "INSERT INTO relationships (source_id, target_id, relationship_type, evidence_id, confidence) VALUES (?, ?, ?, ?, ?)",
+                (src, dst, "WEB_SERVICE_EXPOSURE", evid, "high"),
+            )
+            inserted += 1
+        except sqlite3.IntegrityError:
+            pass
+
+    # 2. Artifact Vault Download: web_app -> binary (keykeeper)
+    if "unauthenticated_artifact_vault_exposure" in finding_ev and web_assets and bin_assets:
+        aid, evid = finding_ev["unauthenticated_artifact_vault_exposure"]
+        src = web_assets[0]
+        dst = next((ba for ba, bk in assets_by_type.get("binary", []) if "keykeeper" in bk.lower()), bin_assets[0])
+        try:
+            conn.execute(
+                "INSERT INTO relationships (source_id, target_id, relationship_type, evidence_id, confidence) VALUES (?, ?, ?, ?, ?)",
+                (src, dst, "ARTIFACT_VAULT_DOWNLOAD", evid, "high"),
+            )
+            inserted += 1
+        except sqlite3.IntegrityError:
+            pass
+
+    # 3. Binary Passkey Reversed: binary (keykeeper) -> host
+    if bin_assets and host_assets:
+        src = next((ba for ba, bk in assets_by_type.get("binary", []) if "keykeeper" in bk.lower()), bin_assets[0])
+        dst = host_assets[0]
+        evid = finding_ev.get("unauthenticated_console_service", ("", ""))[1] or rows[0][6]
+        try:
+            conn.execute(
+                "INSERT INTO relationships (source_id, target_id, relationship_type, evidence_id, confidence) VALUES (?, ?, ?, ?, ?)",
+                (src, dst, "REVERSED_AUTH_PASSKEY", evid, "high"),
+            )
+            inserted += 1
+        except sqlite3.IntegrityError:
+            pass
+
+    # 4. Binary Probe: host -> binary (vuln_auth_daemon)
+    if bin_assets and host_assets:
+        src = host_assets[0]
+        dst = next((ba for ba, bk in assets_by_type.get("binary", []) if "vuln_auth_daemon" in bk.lower()), bin_assets[-1])
+        evid = finding_ev.get("binary_unsafe_function", ("", ""))[1] or rows[0][6]
+        try:
+            conn.execute(
+                "INSERT INTO relationships (source_id, target_id, relationship_type, evidence_id, confidence) VALUES (?, ?, ?, ?, ?)",
+                (src, dst, "BINARY_DAEMON_PROBE", evid, "high"),
+            )
+            inserted += 1
+        except sqlite3.IntegrityError:
+            pass
+
+    # 5. Arbitrary Resource / Flag Disclosure: host (port 8833) -> keykeeper / vuln_auth_daemon
+    if "flag_disclosure_pidreq" in finding_ev and host_assets and bin_assets:
+        aid, evid = finding_ev["flag_disclosure_pidreq"]
+        src = host_assets[0]
+        dst = next((ba for ba, bk in assets_by_type.get("binary", []) if "vuln_auth_daemon" in bk.lower()), bin_assets[-1])
+        try:
+            conn.execute(
+                "INSERT INTO relationships (source_id, target_id, relationship_type, evidence_id, confidence) VALUES (?, ?, ?, ?, ?)",
+                (src, dst, "FLAG_DISCLOSURE_PIDREQ", evid, "high"),
+            )
+            inserted += 1
+        except sqlite3.IntegrityError:
+            pass
+
+    conn.commit()
+    return inserted

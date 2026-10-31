@@ -1,0 +1,25 @@
+diff --git a/hardening/flag_leak_response.py b/hardening/flag_leak_response.py
+new file mode 100644
+index 0000000000..6a707d9c04
+--- /dev/null
++++ b/hardening/flag_leak_response.py
+@@ -0,0 +1,19 @@
++"""flag_leak_response.py - operator runbook after a flag capture.
++
++Finding summary: One of the competition's planted flags was recovered by the assessment: the host exposed the flag value where the scanner could read it (page body, HTML comment, HTTP header or binary strings). This finding was CONFIRMED by the Verification Service.
++
++1. Record the capture in the assessment report (points for the team).
++2. Revoke access to the leaking location (page body / HTML comment /
++   HTTP header / binary strings) so the flag is no longer readable
++   before the intended exploitation step.
++3. Rotate the flag value in the scoring system if it must stay secret.
++4. Re-crawl to confirm the flag no longer leaks (this closes the loop).
++"""
++
++def confirm_capture(finding_id: str, captured_flag: str) -> dict:
++    """Return the report-ready record (points + provenance)."""
++    return {
++        'finding_id': finding_id,
++        'captured_flag': captured_flag,
++        'action': 'record points, revoke leak location, rotate flag',
++    }

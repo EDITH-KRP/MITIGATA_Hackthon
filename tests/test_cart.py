@@ -537,10 +537,9 @@ class TestRemediationAdvisor(unittest.TestCase):
             "unsafe C functions found: 'strcpy', 'gets'"
         )
         adv = self.advisor.advise("f_unsafe")
-        self.assertEqual(
-            set(adv.keys()),
+        self.assertTrue(
             {"finding_id", "title", "plain_english_summary", "impact",
-             "recommended_fix", "patch_example"},
+             "recommended_fix", "patch_example"}.issubset(set(adv.keys()))
         )
         self.assertEqual(adv["finding_id"], "f_unsafe")
         # targeted patches for the exact functions found
@@ -735,6 +734,101 @@ class TestUIDashboard(unittest.TestCase):
             handler._handle_patches()
             patches = json.loads(handler.wfile.getvalue())
             self.assertIn("patches", patches)
+
+
+class TestUniversalTargetAndAttackGraph(unittest.TestCase):
+    def setUp(self):
+        self.conn = connect(":memory:")
+
+    def tearDown(self):
+        self.conn.close()
+
+    def test_setup_scope_for_target_url(self):
+        from cart.scope import setup_scope_for_target
+        manifest, seed_url = setup_scope_for_target(self.conn, "http://192.168.60.139:1111/ops")
+        self.assertIsNotNone(manifest.locked_at)
+        self.assertIn("192.168.60.139/32", manifest.included_prefixes)
+        self.assertIn("192.168.60.139", manifest.included_hosts)
+        self.assertEqual(seed_url, "http://192.168.60.139:1111/ops")
+
+    def test_setup_scope_for_target_cidr(self):
+        from cart.scope import setup_scope_for_target
+        manifest, seed_url = setup_scope_for_target(self.conn, "10.0.0.0/24")
+        self.assertIsNotNone(manifest.locked_at)
+        self.assertIn("10.0.0.0/24", manifest.included_prefixes)
+        self.assertIsNone(seed_url)
+
+    def test_derive_run_relationships(self):
+        from cart.attackpath import AttackPathBuilder, derive_run_relationships
+        self.conn.execute("INSERT INTO scope_manifests (scope_version, included_prefixes, included_hosts, exclusions, binary_hashes, created_by, locked_at) VALUES ('s1', '[]', '[]', '[]', '{}', 'test', '2026-01-01T00:00:00Z')")
+        self.conn.execute("INSERT INTO runs (run_id, status, tier, started_at, scope_version) VALUES ('r1', 'completed', 'recon', '2026-01-01T00:00:00Z', 's1')")
+        self.conn.execute("INSERT INTO assets (asset_id, run_id, asset_type, canonical_key, first_seen, last_seen) VALUES ('a_h', 'r1', 'host', '192.168.1.5', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')")
+        self.conn.execute("INSERT INTO assets (asset_id, run_id, asset_type, canonical_key, first_seen, last_seen) VALUES ('a_w', 'r1', 'web_app', '192.168.1.5', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')")
+        self.conn.execute("INSERT INTO findings (finding_id, asset_id, finding_type, severity, status) VALUES ('f1', 'a_h', 'reverse_proxy_ip_spoofing', 'high', 'confirmed')")
+        self.conn.execute("INSERT INTO evidence (evidence_id, finding_id, source_tool, artifact_path, hash, timestamp, excerpt) VALUES ('e1', 'f1', 'test_tool', 'test_path', 'hash123', '2026-01-01T00:00:00Z', 'Spoofed XFF')")
+        self.conn.commit()
+
+        count = derive_run_relationships(self.conn)
+        self.assertGreaterEqual(count, 1)
+        builder = AttackPathBuilder(self.conn, "current")
+        paths = builder.build()
+        self.assertGreaterEqual(len(paths), 1)
+
+    def test_new_web_verification_playbooks(self):
+        from cart.models import FindingStatus
+        from cart.verify import VerificationService
+
+        self.conn.execute("INSERT INTO scope_manifests (scope_version, included_prefixes, included_hosts, exclusions, binary_hashes, created_by, locked_at) VALUES ('s2', '[]', '[]', '[]', '{}', 'test', '2026-01-01T00:00:00Z')")
+        self.conn.execute("INSERT INTO runs (run_id, status, tier, started_at, scope_version) VALUES ('r2', 'active', 'deep', '2026-01-01T00:00:00Z', 's2')")
+        self.conn.execute("INSERT INTO assets (asset_id, run_id, asset_type, canonical_key, first_seen, last_seen) VALUES ('a_web', 'r2', 'web_app', 'test.com', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')")
+
+        test_cases = [
+            ("f_cors", "cors_wildcard_misconfiguration", "Access-Control-Allow-Origin: *"),
+            ("f_robots", "robots_txt_disclosure", "Disallow: /admin"),
+            ("f_api", "unauthenticated_api_exposure", '{"version": "1.0", "status": "ok"}'),
+            ("f_dir", "directory_listing_disclosure", "<h1>Index of /ftp</h1>"),
+            ("f_env", "sensitive_file_exposure", "DB_PASSWORD=supersecret"),
+        ]
+
+        svc = VerificationService(self.conn, "r2")
+        for fid, ftype, excerpt in test_cases:
+            self.conn.execute(
+                "INSERT INTO findings (finding_id, asset_id, finding_type, severity, status, confidence, ptes_phase, summary) VALUES (?, 'a_web', ?, 'medium', 'candidate', 'high', 'vulnerability_analysis', 'test summary')",
+                (fid, ftype),
+            )
+            self.conn.execute(
+                "INSERT INTO evidence (evidence_id, finding_id, source_tool, artifact_path, hash, timestamp, excerpt) VALUES (?, ?, 'web_crawler', 'http://test.com', 'h1', '2026-01-01T00:00:00Z', ?)",
+                (f"ev_{fid}", fid, excerpt),
+            )
+            svc.queue([fid])
+            verdict = svc.verify_one(fid)
+            self.assertEqual(verdict, FindingStatus.CONFIRMED, f"Failed confirming {ftype}")
+
+    def test_new_remediation_advisor_templates(self):
+        from cart.advisor import RemediationAdvisor
+
+        self.conn.execute("INSERT INTO scope_manifests (scope_version, included_prefixes, included_hosts, exclusions, binary_hashes, created_by, locked_at) VALUES ('s3', '[]', '[]', '[]', '{}', 'test', '2026-01-01T00:00:00Z')")
+        self.conn.execute("INSERT INTO runs (run_id, status, tier, started_at, scope_version) VALUES ('r3', 'active', 'deep', '2026-01-01T00:00:00Z', 's3')")
+        self.conn.execute("INSERT INTO assets (asset_id, run_id, asset_type, canonical_key, first_seen, last_seen) VALUES ('a3', 'r3', 'web_app', 'test.com', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')")
+
+        types = [
+            "cors_wildcard_misconfiguration",
+            "robots_txt_disclosure",
+            "unauthenticated_api_exposure",
+            "directory_listing_disclosure",
+            "sensitive_file_exposure",
+        ]
+        advisor = RemediationAdvisor(self.conn)
+        for i, ftype in enumerate(types):
+            fid = f"find_adv_{i}"
+            self.conn.execute(
+                "INSERT INTO findings (finding_id, asset_id, finding_type, severity, status, confidence, ptes_phase, summary) VALUES (?, 'a3', ?, 'medium', 'confirmed', 'high', 'vulnerability_analysis', 'summary')",
+                (fid, ftype),
+            )
+            adv = advisor.advise(fid)
+            self.assertTrue(adv["cwe_id"].startswith("CWE-"))
+            self.assertIn("recommended_fix", adv)
+            self.assertIn("patch_example", adv)
 
 
 if __name__ == "__main__":

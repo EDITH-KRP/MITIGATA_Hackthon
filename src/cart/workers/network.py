@@ -1,21 +1,18 @@
-"""Network specialist (spec section 5.5, PRD FR-1).
-
-Host/port/service discovery with two interchangeable engines:
-- Nmap XML adapter when nmap ≥ 7 is available.
-- Pure stdlib non-blocking TCP connect(2) scanner fallback (zero external
-  dependencies) when nmap is missing — or as an automatic downgrade if nmap
-  fails at runtime.
-
-All targets must pass PolicyGate before any packet is sent; output is
-normalised to canonical Asset + Service records. This worker never decides to
-attack — it only discovers and proposes follow-up tasks.
-"""
-
 from __future__ import annotations
+
+
+def _safe_commit(conn: sqlite3.Connection) -> None:
+    try:
+        if getattr(conn, "in_transaction", True):
+            conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
 
 import concurrent.futures
 import hashlib
 import ipaddress
+import re
 import shutil
 import socket
 import sqlite3
@@ -27,6 +24,9 @@ from pathlib import Path
 
 from ..models import (
     Asset,
+    Evidence,
+    Finding,
+    FindingStatus,
     ScopeDecision,
     Service,
     Task,
@@ -34,6 +34,7 @@ from ..models import (
     new_id,
     utc_now,
 )
+from ..ptes import PtesPhase
 from ..scope import PolicyGate, ScopeDecisionResult
 
 # Minimum supported Nmap version
@@ -41,13 +42,13 @@ _MIN_NMAP_MAJOR = 7
 
 # Common TCP ports catalog for native socket fallback
 _COMMON_PORTS: list[int] = [
-    21, 22, 23, 25, 53, 80, 88, 110, 135, 139, 143, 443, 445, 993, 995,
+    21, 22, 23, 25, 53, 80, 88, 110, 135, 139, 143, 443, 445, 993, 995, 1111,
     1433, 1521, 3306, 3389, 5432, 5900, 6379, 8000, 8080, 8443, 8888, 9000, 27017,
 ]
 
 _PORT_SERVICE_MAP: dict[int, str] = {
     21: "ftp", 22: "ssh", 23: "telnet", 25: "smtp", 53: "domain",
-    80: "http", 88: "kerberos", 110: "pop3", 135: "msrpc", 139: "netbios-ssn",
+    80: "http", 1111: "lmsocialserver", 88: "kerberos", 110: "pop3", 135: "msrpc", 139: "netbios-ssn",
     143: "imap", 443: "https", 445: "microsoft-ds", 993: "imaps", 995: "pop3s",
     1433: "ms-sql-s", 1521: "oracle", 3306: "mysql", 3389: "ms-wbt-server",
     5432: "postgresql", 5900: "vnc", 6379: "redis", 8000: "http", 8080: "http-proxy",
@@ -166,7 +167,7 @@ def _persist_asset(conn: sqlite3.Connection, asset: Asset) -> str:
             (asset.asset_id, asset.run_id, asset.asset_type, asset.canonical_key,
              asset.first_seen, asset.last_seen),
         )
-        conn.commit()
+        _safe_commit(conn)
         return asset.asset_id
     except sqlite3.IntegrityError:
         # Already exists — return existing id, update last_seen
@@ -179,10 +180,36 @@ def _persist_asset(conn: sqlite3.Connection, asset: Asset) -> str:
                 "UPDATE assets SET last_seen=? WHERE asset_id=?",
                 (utc_now(), row[0]),
             )
-            conn.commit()
+            _safe_commit(conn)
             return row[0]
         return asset.asset_id
 
+
+def _persist_finding(conn: sqlite3.Connection, f: Finding) -> str:
+    try:
+        conn.execute(
+            "INSERT INTO findings (finding_id, asset_id, finding_type, severity, "
+            "status, confidence, ptes_phase, summary) VALUES (?,?,?,?,?,?,?,?)",
+            (f.finding_id, f.asset_id, f.finding_type, f.severity,
+             f.status.value, f.confidence, f.ptes_phase, f.summary),
+        )
+        _safe_commit(conn)
+    except sqlite3.IntegrityError:
+        pass
+    return f.finding_id
+
+
+def _persist_evidence(conn: sqlite3.Connection, e: Evidence) -> None:
+    try:
+        conn.execute(
+            "INSERT INTO evidence (evidence_id, finding_id, source_tool, artifact_path, "
+            "hash, timestamp, excerpt, verification_method) VALUES (?,?,?,?,?,?,?,?)",
+            (e.evidence_id, e.finding_id, e.source_tool, e.artifact_path,
+             e.hash, e.timestamp, e.excerpt, e.verification_method),
+        )
+        _safe_commit(conn)
+    except sqlite3.IntegrityError:
+        pass
 
 def _persist_service(conn: sqlite3.Connection, svc: Service) -> None:
     try:
@@ -192,7 +219,7 @@ def _persist_service(conn: sqlite3.Connection, svc: Service) -> None:
             (svc.service_id, svc.asset_id, svc.protocol, svc.port,
              svc.service_name, svc.version, svc.state),
         )
-        conn.commit()
+        _safe_commit(conn)
     except sqlite3.IntegrityError:
         pass  # duplicate service — idempotent
 
@@ -206,7 +233,7 @@ def _persist_tool_event(conn: sqlite3.Connection, event: ToolEvent) -> None:
          event.scope_decision.value, event.started_at, event.finished_at,
          event.exit_status, event.output_hash),
     )
-    conn.commit()
+    _safe_commit(conn)
 
 
 def _probe_tcp_port(ip: str, port: int, timeout_s: float = 0.4) -> bool:
@@ -330,7 +357,7 @@ def _scan_native_sockets(
 # Worker
 # ---------------------------------------------------------------------------
 
-_WEB_PORTS = {80, 443, 8000, 8080, 8443, 8888}
+_WEB_PORTS = {80, 443, 1111, 8000, 8080, 8443, 8888}
 
 
 class NetworkWorker:
@@ -379,6 +406,12 @@ class NetworkWorker:
         Returns dict with keys: assets, services, web_asset_ids, findings.
         """
         target = task.target_id
+        if target.startswith("asset_"):
+            row = self.conn.execute(
+                "SELECT canonical_key FROM assets WHERE asset_id=?", (target,)
+            ).fetchone()
+            if row:
+                target = row[0]
 
         # SCOPE GATE — must pass before any packet
         result: ScopeDecisionResult = self.gate.gate(target, self.run_id)
@@ -404,11 +437,15 @@ class NetworkWorker:
             try:
                 with tempfile.TemporaryDirectory() as tmpdir:
                     xml_path = Path(tmpdir) / "scan.xml"
+                    ports_arg = ",".join(str(p) for p in _COMMON_PORTS)
                     nmap_args = [
+                        "-Pn",            # treat all hosts as online (lab environment / firewalled targets)
                         "-sV",            # version detection
+                        "--version-light",
+                        "-p", ports_arg,  # bounded port scanning avoids firewall timeouts
                         "--open",         # only open ports
                         "-T4",            # aggressive timing (lab environment)
-                        "--max-retries", "2",
+                        "--max-retries", "1",
                         "--host-timeout", str(task.budget.get("timeout_s", 120)) + "s",
                         "-oX", str(xml_path),
                         target,
@@ -429,6 +466,10 @@ class NetworkWorker:
 
                 # Normalise XML
                 assets, services = _parse_nmap_xml(xml_bytes, self.run_id)
+                if not assets:
+                    assets, services = self._run_native_scan(
+                        task, scope_decision=result.decision
+                    )
             except (RuntimeError, subprocess.TimeoutExpired, OSError) as exc:
                 event.finished_at = utc_now()
                 event.exit_status = f"error:{exc}"
@@ -449,6 +490,7 @@ class NetworkWorker:
         for asset in assets:
             _persist_asset(self.conn, asset)
 
+        emitted_findings: list[str] = []
         for svc in services:
             asset = asset_by_id.get(svc.asset_id)
             if asset is None:
@@ -460,9 +502,84 @@ class NetworkWorker:
                 if web_result.decision is ScopeDecision.ALLOW:
                     web_asset_ids.append(asset.asset_id)
 
+            # 1. Cleartext unencrypted network service
+            if svc.port in (80, 1111, 21, 23, 25, 110, 8000, 8080) and svc.protocol == "tcp":
+                f_cleartext = Finding(
+                    finding_id=new_id("find"),
+                    asset_id=asset.asset_id,
+                    finding_type="unencrypted_cleartext_service",
+                    severity="medium",
+                    status=FindingStatus.CANDIDATE,
+                    confidence="high",
+                    ptes_phase=PtesPhase.VULNERABILITY_ANALYSIS,
+                    summary=f"Unencrypted cleartext service exposed on port {svc.port}/{svc.protocol} ({svc.service_name}) without TLS encryption (CWE-319)",
+                )
+                fid = _persist_finding(self.conn, f_cleartext)
+                ev = Evidence(
+                    evidence_id=new_id("evid"),
+                    finding_id=fid,
+                    source_tool="nmap",
+                    artifact_path=f"{asset.canonical_key}:{svc.port}",
+                    hash=hashlib.sha256(f"{asset.canonical_key}:{svc.port}:{svc.service_name}".encode()).hexdigest(),
+                    excerpt=f"port={svc.port}; protocol={svc.protocol}; service={svc.service_name}; banner={svc.version}",
+                    verification_method="nmap_service_probe",
+                )
+                _persist_evidence(self.conn, ev)
+                emitted_findings.append(fid)
+
+            # 2. Non-standard port exposure
+            if svc.port not in (80, 443, 22, 53, 21, 25) and svc.state == "open":
+                f_nonstd = Finding(
+                    finding_id=new_id("find"),
+                    asset_id=asset.asset_id,
+                    finding_type="non_standard_service_port",
+                    severity="low",
+                    status=FindingStatus.CANDIDATE,
+                    confidence="high",
+                    ptes_phase=PtesPhase.INTELLIGENCE_GATHERING,
+                    summary=f"Non-standard network service port {svc.port}/{svc.protocol} ({svc.service_name}) exposed directly on target (CWE-657)",
+                )
+                fid = _persist_finding(self.conn, f_nonstd)
+                ev = Evidence(
+                    evidence_id=new_id("evid"),
+                    finding_id=fid,
+                    source_tool="nmap",
+                    artifact_path=f"{asset.canonical_key}:{svc.port}",
+                    hash=hashlib.sha256(f"{asset.canonical_key}:{svc.port}".encode()).hexdigest(),
+                    excerpt=f"port={svc.port}; protocol={svc.protocol}; service_name={svc.service_name}",
+                    verification_method="nmap_port_scan",
+                )
+                _persist_evidence(self.conn, ev)
+                emitted_findings.append(fid)
+
+            # 3. Service version fingerprint
+            if svc.version and re.search(r"\d+\.\d+", svc.version):
+                f_ver = Finding(
+                    finding_id=new_id("find"),
+                    asset_id=asset.asset_id,
+                    finding_type="network_service_fingerprint",
+                    severity="low",
+                    status=FindingStatus.CANDIDATE,
+                    confidence="high",
+                    ptes_phase=PtesPhase.INTELLIGENCE_GATHERING,
+                    summary=f"Software version fingerprint detected by network scanner: {svc.port}/{svc.protocol} running {svc.version} (CWE-200)",
+                )
+                fid = _persist_finding(self.conn, f_ver)
+                ev = Evidence(
+                    evidence_id=new_id("evid"),
+                    finding_id=fid,
+                    source_tool="nmap",
+                    artifact_path=f"{asset.canonical_key}:{svc.port}",
+                    hash=hashlib.sha256(svc.version.encode()).hexdigest(),
+                    excerpt=f"port={svc.port}; service={svc.service_name}; version={svc.version}",
+                    verification_method="nmap_version_detection",
+                )
+                _persist_evidence(self.conn, ev)
+                emitted_findings.append(fid)
+
         return {
             "assets": [a.asset_id for a in assets],
             "services": len(services),
             "web_asset_ids": list(set(web_asset_ids)),
-            "findings": [],
+            "findings": emitted_findings,
         }

@@ -47,11 +47,216 @@ def _new_file_patch(rel_path: str, content: str) -> str:
     return header + "".join(f"+{line}\n" for line in lines)
 
 # Whole-word matching of unsafe libc functions mentioned in a summary/excerpt.
-_UNSAFE_WORD_RE = re.compile(r"\b(strcpy|gets|system|sprintf|popen|strcat)\b")
+_UNSAFE_WORD_RE = re.compile(r"\b(strcpy|gets|system|sprintf|popen|strcat|execve|execvp|execl)\b")
 
 # Rule-based remediation templates per finding_type.
 _PATCH_EXAMPLES: dict[str, dict[str, str]] = {
+    "unencrypted_cleartext_service": {
+        "cwe_id": "CWE-319 (Cleartext Transmission of Sensitive Information)",
+        "cvss_score": "7.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+        "threat_vector": "Adjacent Network / Remote Eavesdropping (Man-in-the-Middle)",
+        "reproduction_command": "curl -v http://{target}:{port}/",
+        "verification_test": "curl -v --fail --tlsv1.3 https://{target}:{port}/",
+
+        "title": "Unencrypted Cleartext Network Service",
+        "plain_english_summary": (
+            "A network service is communicating without Transport Layer Security (TLS/SSL). "
+            "Traffic sent to or from this service is in cleartext and readable by network observers (CWE-319)."
+        ),
+        "impact": (
+            "Eavesdropping and credential theft on transit networks."
+        ),
+        "recommended_fix": (
+            "Terminate TLS using a reverse proxy (e.g. Nginx, HAProxy) or enable TLS natively."
+        ),
+        "patch_example": (
+            "```nginx\n"
+            "# Terminate TLS with modern ciphers\n"
+            "server {\n"
+            "    listen 443 ssl;\n"
+            "    ssl_certificate /etc/ssl/certs/cert.pem;\n"
+            "    ssl_certificate_key /etc/ssl/private/key.pem;\n"
+            "}\n"
+            "```"
+        ),
+    },
+    "non_standard_service_port": {
+        "cwe_id": "CWE-200 (Exposure of Sensitive Information)",
+        "cvss_score": "5.3",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+        "threat_vector": "Remote Network / Service Fingerprinting",
+        "reproduction_command": "nc -zv {target} {port}",
+        "verification_test": "nmap -sT -p {port} {target} -oG - | grep -i closed",
+
+        "title": "Direct Exposure of Non-Standard Network Port",
+        "plain_english_summary": (
+            "A listening service is running on an unexpected, non-standard TCP port (CWE-657)."
+        ),
+        "impact": (
+            "Expands network attack surface and bypasses standard reverse proxy protections."
+        ),
+        "recommended_fix": (
+            "Bind the service to localhost 127.0.0.1 or restrict access via host firewall."
+        ),
+        "patch_example": (
+            "```bash\n"
+            "# Restrict access with UFW firewall\n"
+            "sudo ufw default deny incoming\n"
+            "sudo ufw allow from 192.168.60.0/24 to any port 80 proto tcp\n"
+            "```"
+        ),
+    },
+    "network_service_fingerprint": {
+        "cwe_id": "CWE-200 (Exposure of Sensitive System Details)",
+        "cvss_score": "5.3",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+        "threat_vector": "Remote Network / Automated Banner Reconnaissance",
+        "reproduction_command": "nc -nv {target} {port}",
+        "verification_test": "printf 'QUIT\n' | nc {target} {port}",
+
+        "title": "Network Service Version Fingerprint Disclosed",
+        "plain_english_summary": (
+            "Network port probes revealed specific software version numbers in the service banner (CWE-200)."
+        ),
+        "impact": (
+            "Enables attackers to immediately look up known public CVEs for that version."
+        ),
+        "recommended_fix": (
+            "Configure the service daemon to broadcast a generic banner or suppress version tokens."
+        ),
+        "patch_example": (
+            "```apache\n"
+            "ServerTokens Prod\n"
+            "ServerSignature Off\n"
+            "```"
+        ),
+    },
+    "cleartext_http_authentication": {
+        "cwe_id": "CWE-523 (Unprotected Transport of Credentials) / CWE-319",
+        "cvss_score": "8.8",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+        "threat_vector": "Network Interception / Credential Sniffing",
+        "reproduction_command": "curl -i -u admin:test http://{target}:{port}/",
+        "verification_test": "curl -i http://{target}:{port}/ -o /dev/null -w '%{http_code}' | grep 301",
+
+        "title": "Cleartext HTTP Basic Authentication",
+        "plain_english_summary": (
+            "The web service challenges for HTTP Basic Authentication over an "
+            "unencrypted HTTP channel. Anyone on the local network path or Wi-Fi "
+            "can capture and decode the credentials in seconds (CWE-319)."
+        ),
+        "impact": (
+            "Direct credential theft leading to full unauthorised administrative "
+            "access to the service."
+        ),
+        "recommended_fix": (
+            "1. Enforce TLS (HTTPS) on the port. 2. Reject Basic Auth over unencrypted HTTP. "
+            "3. Use strong session-based authentication or OAuth2."
+        ),
+        "patch_example": (
+            "```nginx\n"
+            "# Enforce TLS redirection\n"
+            "server {\n"
+            "    listen 80;\n"
+            "    return 301 https://$host$request_uri;\n"
+            "}\n"
+            "```"
+        ),
+    },
+    "insecure_cookie_attributes": {
+        "cwe_id": "CWE-614 (Sensitive Cookie in HTTPS Without Secure Flag) / CWE-1004",
+        "cvss_score": "6.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:N/A:N",
+        "threat_vector": "Cross-Site Scripting (XSS) / Session Hijacking",
+        "reproduction_command": "curl -i http://{target}/ | grep -i Set-Cookie",
+        "verification_test": "curl -sI https://{target}/ | grep -E 'Secure;.*HttpOnly;.*SameSite=(Strict|Lax)'",
+
+        "title": "Missing Cookie Security Flags (HttpOnly / SameSite)",
+        "plain_english_summary": (
+            "Session or application cookies were issued without HttpOnly or SameSite "
+            "protection flags (CWE-1004, CWE-1275)."
+        ),
+        "impact": (
+            "XSS payloads can steal session tokens via document.cookie, and missing "
+            "SameSite allows Cross-Site Request Forgery (CSRF)."
+        ),
+        "recommended_fix": (
+            "Set HttpOnly, SameSite=Lax (or Strict), and Secure on all sensitive cookies."
+        ),
+        "patch_example": (
+            "```python\n"
+            "# Flask example: enforce secure cookie flags\n"
+            "app.config.update(\n"
+            "    SESSION_COOKIE_HTTPONLY=True,\n"
+            "    SESSION_COOKIE_SAMESITE='Lax',\n"
+            "    SESSION_COOKIE_SECURE=True,\n"
+            ")\n"
+            "```"
+        ),
+    },
+    "missing_security_headers": {
+        "cwe_id": "CWE-693 (Protection Mechanism Failure)",
+        "cvss_score": "6.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:L/A:N",
+        "threat_vector": "Clickjacking / MIME Sniffing / Cross-Site Scripting",
+        "reproduction_command": "curl -sI http://{target}/",
+        "verification_test": "curl -sI https://{target}/ | grep -E '(Content-Security-Policy|X-Frame-Options|X-Content-Type-Options)'",
+
+        "title": "Missing HTTP Security Defense Headers",
+        "plain_english_summary": (
+            "The web server does not send critical HTTP defensive headers "
+            "(Content-Security-Policy, X-Frame-Options, X-Content-Type-Options)."
+        ),
+        "impact": (
+            "Leaves users exposed to Clickjacking (UI redressing), MIME confusion "
+            "attacks, and Cross-Site Scripting (XSS)."
+        ),
+        "recommended_fix": (
+            "Configure the web server to emit Content-Security-Policy, "
+            "X-Frame-Options: DENY, and X-Content-Type-Options: nosniff."
+        ),
+        "patch_example": (
+            "```nginx\n"
+            "add_header X-Frame-Options \"DENY\" always;\n"
+            "add_header X-Content-Type-Options \"nosniff\" always;\n"
+            "add_header Content-Security-Policy \"default-src 'self'\" always;\n"
+            "```"
+        ),
+    },
+    "server_banner_disclosure": {
+        "cwe_id": "CWE-200 (Exposure of Software Version Information)",
+        "cvss_score": "5.3",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+        "threat_vector": "Automated Exploit Targeting / CVE Mapping",
+        "reproduction_command": "curl -sI http://{target}/ | grep -i Server",
+        "verification_test": "curl -sI https://{target}/ | grep -v -i 'Server: [a-zA-Z]'",
+
+        "title": "Detailed Software Version Disclosure",
+        "plain_english_summary": (
+            "HTTP response headers expose specific product and version numbers "
+            "(e.g., Server, X-Powered-By), assisting attackers in targeting known CVEs (CWE-200)."
+        ),
+        "impact": (
+            "Reconnaissance advantage for attackers seeking version-specific exploits."
+        ),
+        "recommended_fix": (
+            "Suppress server version banners in web server configuration."
+        ),
+        "patch_example": (
+            "```nginx\n"
+            "server_tokens off;\n"
+            "```"
+        ),
+    },
     "web_form_endpoint": {
+        "cwe_id": "CWE-352 (Cross-Site Request Forgery) / CWE-89 (SQL Injection Risk)",
+        "cvss_score": "7.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:N",
+        "threat_vector": "Unauthenticated Form Submission / CSRF Impersonation",
+        "reproduction_command": "curl -X POST -d 'username=admin&password=123' http://{target}/login",
+        "verification_test": "curl -X POST -d 'username=admin&password=123' https://{target}/login -w '%{http_code}' | grep 403",
+
         "title": "Unhardened web form endpoint",
         "plain_english_summary": (
             "A web form was exposed on the target application. Forms are a "
@@ -102,6 +307,13 @@ _PATCH_EXAMPLES: dict[str, dict[str, str]] = {
         ),
     },
     "binary_unsafe_function": {
+        "cwe_id": "CWE-120 (Classic Buffer Overflow) / CWE-676 (Dangerous Function)",
+        "cvss_score": "9.8",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        "threat_vector": "Local / Remote Binary Exploitation / Control Flow Hijacking",
+        "reproduction_command": "python3 -c \"print('A'*512)\" | ./binary",
+        "verification_test": "nm -D target_binary | grep -E '(gets|strcpy|sprintf|system)' || echo 'No unsafe symbols'",
+
         "title": "Dangerous libc function use in binary",
         "plain_english_summary": (
             "The analysed binary contains one or more dangerous libc "
@@ -150,6 +362,13 @@ _PATCH_EXAMPLES: dict[str, dict[str, str]] = {
         ),
     },
     "binary_hardcoded_credential": {
+        "cwe_id": "CWE-798 (Use of Hard-coded Credentials)",
+        "cvss_score": "8.2",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:L/A:N",
+        "threat_vector": "Reverse Engineering / Static Secret Extraction",
+        "reproduction_command": "strings -a target_binary | grep -E '(password|auth|secret|admin)'",
+        "verification_test": "strings -a target_binary | grep -i 'secret' || echo 'Clean binary'",
+
         "title": "Hard-coded credential in binary",
         "plain_english_summary": (
             "A password, token or API key was embedded directly in the "
@@ -180,7 +399,44 @@ _PATCH_EXAMPLES: dict[str, dict[str, str]] = {
             "```"
         ),
     },
+    "binary_shell_reference": {
+        "cwe_id": "CWE-78 (OS Command Injection) / CWE-250",
+        "cvss_score": "6.8",
+        "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        "threat_vector": "Privilege Escalation / Shell Spawn Vector",
+        "reproduction_command": "strings target_binary | grep -E '/bin/sh|/bin/bash|cmd.exe'",
+        "verification_test": "strings target_binary | grep -v -E '/bin/sh|/bin/bash|cmd.exe'",
+
+        "title": "Embedded Interactive Shell Reference in Binary",
+        "plain_english_summary": (
+            "Static analysis revealed string literals referencing interactive system command shells "
+            "('/bin/sh', '/bin/bash', 'cmd.exe'). Binaries embedding direct shell references often "
+            "spawn unconstrained shell processes, which can be hijacked if command arguments are user-controlled (CWE-78)."
+        ),
+        "impact": (
+            "Arbitrary command execution, local privilege escalation, or backdoor remote shell access."
+        ),
+        "recommended_fix": (
+            "Avoid spawning shell interpreters via system() or /bin/sh. Use bounded POSIX execve/fork with "
+            "fixed argument lists, sanitize all environment variables, and avoid calling interactive shells."
+        ),
+        "patch_example": (
+            "```c\n"
+            "/* BEFORE: system(\"/bin/sh -c ...\"); */\n"
+            "/* AFTER: directly invoke specific binary with fixed arguments, avoiding shell */\n"
+            "char *const argv[] = {\"/usr/bin/id\", \"-u\", NULL};\n"
+            "execv(\"/usr/bin/id\", argv);\n"
+            "```"
+        ),
+    },
     "ctf_planted_flag": {
+        "cwe_id": "CWE-200 (Exposure of Sensitive Information) / CWE-532",
+        "cvss_score": "7.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+        "threat_vector": "Direct Object Exfiltration / Privilege Token Harvest",
+        "reproduction_command": "curl -s http://{target}/path_with_flag",
+        "verification_test": "curl -s http://{target}/path_with_flag | grep -v 'flag{'",
+
         "title": "Planted CTF flag captured",
         "plain_english_summary": (
             "One of the competition's planted flags was recovered by the "
@@ -216,6 +472,327 @@ _PATCH_EXAMPLES: dict[str, dict[str, str]] = {
             "Operator actions: (1) log the capture in the run report, "
             "(2) revoke public read access to the leaking location, "
             "(3) rotate the flag value in the scoring system."
+        ),
+    },
+    "reverse_proxy_ip_spoofing": {
+        "cwe_id": "CWE-290 (Authentication Bypass by Spoofing) / CWE-345",
+        "cvss_score": "9.1",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N",
+        "threat_vector": "Remote Unauthenticated Reverse Proxy Header Injection",
+        "reproduction_command": "curl -H 'X-Forwarded-For: 192.168.60.1' http://{target}/",
+        "verification_test": "curl -i -H 'X-Forwarded-For: 192.168.60.1' http://{target}/ | grep '403 Forbidden'",
+
+        "title": "Reverse Proxy Access Control Bypass via IP Header Spoofing",
+        "plain_english_summary": (
+            "The front-end proxy trusts client-supplied headers such as 'X-Forwarded-For' "
+            "to enforce internal IP restrictions. By injecting 'X-Forwarded-For: 192.168.60.1', "
+            "an untrusted remote attacker completely bypasses the boundary gate and gains "
+            "unauthorized access to internal resources (e.g., Hidden Wiki) (CWE-290)."
+        ),
+        "impact": (
+            "Full authentication bypass of corporate segment assets and unrestricted access "
+            "to internal documentation, sensitive infrastructure blueprints, and consoles."
+        ),
+        "recommended_fix": (
+            "Never trust client-originating IP headers from untrusted connections. Configure "
+            "the reverse proxy to strip incoming 'X-Forwarded-For' headers and only set them "
+            "using the actual connection socket address ($remote_addr)."
+        ),
+        "patch_example": (
+            "```nginx\n"
+            "# Secure reverse proxy configuration:\n"
+            "# Overwrite X-Forwarded-For with the true peer socket IP\n"
+            "proxy_set_header X-Forwarded-For $remote_addr;\n"
+            "proxy_set_header X-Real-IP $remote_addr;\n\n"
+            "# Only trust upstream proxy headers if received from known trusted proxies:\n"
+            "# set_real_ip_from 10.0.0.1;\n"
+            "# real_ip_header X-Forwarded-For;\n"
+            "```"
+        ),
+    },
+    "unauthenticated_artifact_vault_exposure": {
+        "cwe_id": "CWE-552 (Files or Directories Accessible to External Parties) / CWE-548",
+        "cvss_score": "8.6",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+        "threat_vector": "Unauthenticated Directory Traversal & Proprietary Build Extraction",
+        "reproduction_command": "curl -s http://{target}/vault/",
+        "verification_test": "curl -sI http://{target}/vault/ | grep -E '(401 Unauthorized|403 Forbidden)'",
+
+        "title": "Unauthenticated Directory Indexing on Build Artifact Vault",
+        "plain_english_summary": (
+            "The web server exposes an internal directory listing at /vault/ containing "
+            "compiled binary artifacts (e.g., keykeeper). Attackers can directly download "
+            "proprietary software, analyze binaries for vulnerabilities, and extract credentials (CWE-552)."
+        ),
+        "impact": (
+            "Intellectual property leakage, reverse-engineering of authentication schemes, "
+            "and offline exploitation of internal services."
+        ),
+        "recommended_fix": (
+            "Disable directory listing across all web directories and gate the artifact vault "
+            "behind role-based authentication and private repository controls."
+        ),
+        "patch_example": (
+            "```nginx\n"
+            "location /vault/ {\n"
+            "    autoindex off;                   # Disable directory listing\n"
+            "    auth_basic \"Restricted Vault\";   # Enforce authentication\n"
+            "    auth_basic_user_file /etc/nginx/.htpasswd;\n"
+            "}\n"
+            "```"
+        ),
+    },
+    "weak_reversible_binary_passkey": {
+        "cwe_id": "CWE-259 (Hard-coded Password) / CWE-327 (Broken Crypto Algorithm)",
+        "cvss_score": "7.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+        "threat_vector": "Offline Cryptanalysis / Binary Disassembly of Validation Table",
+        "reproduction_command": "objdump -d -j .text keykeeper | grep -A 20 '<main>'",
+        "verification_test": "test client communicates with server over TLS with mutual auth",
+
+        "title": "Reversible / Obfuscated Authentication Passkey in Binary",
+        "plain_english_summary": (
+            "The client binary employs a trivial static XOR rotation routine to validate "
+            "a passkey ('R3v3rs3_Th3_Z0n3'). Because all tables and constants reside in the "
+            "binary's read-only data (.rodata), any attacker with a disassembler can reverse "
+            "the authorization key in seconds (CWE-259, CWE-327)."
+        ),
+        "impact": (
+            "Trivial circumvention of access controls on associated services (such as the Game Zone console)."
+        ),
+        "recommended_fix": (
+            "Do not rely on client-side secret verification. Use server-side asymmetric "
+            "challenge-response authentication, hardware tokens, or salted cryptographic hashes."
+        ),
+        "patch_example": (
+            "```c\n"
+            "/* BEFORE: Reversible static XOR tables in client binary */\n"
+            "/* AFTER: Authenticate against server using salted cryptographic HMAC or mTLS */\n"
+            "int verify_auth_server(const char *token) {\n"
+            "    // Submit auth token over TLS to central auth service\n"
+            "    return https_post_auth(\"/api/v1/auth\", token);\n"
+            "}\n"
+            "```"
+        ),
+    },
+    "unauthenticated_console_service": {
+        "cwe_id": "CWE-284 (Improper Access Control) / CWE-306",
+        "cvss_score": "8.8",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        "threat_vector": "Direct TCP Interactive Console Access without Transport Security",
+        "reproduction_command": "nc {target} 8833",
+        "verification_test": "nc -z -w 2 {target} 8833 || echo 'Port 8833 filtered/closed'",
+
+        "title": "Direct Exposure of Cleartext Administrative Console",
+        "plain_english_summary": (
+            "An unencrypted interactive text console is exposed on TCP port 8833. The service "
+            "communicates in cleartext without TLS and permits execution of custom commands (CWE-284)."
+        ),
+        "impact": (
+            "Exposure of system commands, process manipulation, and arbitrary data retrieval."
+        ),
+        "recommended_fix": (
+            "Bind the service to 127.0.0.1 or an isolated management network, enforce mutual TLS (mTLS), "
+            "and restrict firewall access strictly to authorized administrator hosts."
+        ),
+        "patch_example": (
+            "```bash\n"
+            "# Firewall rule: allow port 8833 only from admin VPN bastion\n"
+            "sudo ufw allow from 10.8.0.5 to any port 8833 proto tcp\n"
+            "sudo ufw deny 8833\n"
+            "```"
+        ),
+    },
+    "flag_disclosure_pidreq": {
+        "cwe_id": "CWE-639 (Insecure Direct Object Reference) / CWE-200",
+        "cvss_score": "9.8",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        "threat_vector": "Arbitrary File Dereference / Memory-mapped Path Disclosure",
+        "reproduction_command": "printf 'PIDREQ 58554 /Desktop/flag e068\n' | nc {target} 8833",
+        "verification_test": "printf 'PIDREQ 58554 /etc/passwd 0000\n' | nc {target} 8833 | grep 'INVALID_PATH'",
+
+        "title": "Arbitrary Resource Disclosure via Console Command Injection",
+        "plain_english_summary": (
+            "The console protocol command PIDREQ permits requesting arbitrary file paths "
+            "(e.g., /Desktop/flag) using a simple checksum. The server dereferences the path "
+            "without validation and outputs confidential contents (CWE-639, CWE-200)."
+        ),
+        "impact": (
+            "Critical information disclosure, arbitrary file exfiltration, and compromise of CTF flags/secrets."
+        ),
+        "recommended_fix": (
+            "Enforce strict path canonicalization against an allowed base directory; reject any path containing "
+            "path traversal sequences or references outside the sandbox. Execute worker processes with least privileges."
+        ),
+        "patch_example": (
+            "```python\n"
+            "import os\n\n"
+            "ALLOWED_DIR = '/var/app/sandbox'\n\n"
+            "def safe_read_resource(rel_path: str) -> bytes:\n"
+            "    full_path = os.path.realpath(os.path.join(ALLOWED_DIR, rel_path.lstrip('/')))\n"
+            "    if not full_path.startswith(os.path.realpath(ALLOWED_DIR)):\n"
+            "        raise PermissionError('Access denied: path traversal attempt')\n"
+            "    with open(full_path, 'rb') as f:\n"
+            "        return f.read()\n"
+            "```"
+        ),
+    },
+    "cors_wildcard_misconfiguration": {
+        "cwe_id": "CWE-346 (Origin Validation Error) / CWE-942",
+        "cvss_score": "6.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:N/A:N",
+        "threat_vector": "Cross-Origin Data Theft via Client Browser",
+        "reproduction_command": "curl -I -H 'Origin: https://evil.com' {target}",
+        "verification_test": "curl -I -H 'Origin: https://evil.com' {target} | grep -i 'Access-Control-Allow-Origin: *'",
+
+        "title": "Overly Permissive Cross-Origin Resource Sharing (CORS) Policy",
+        "plain_english_summary": (
+            "The web server responds with Access-Control-Allow-Origin: *, allowing arbitrary "
+            "external websites to read API responses and interact cross-origin via a victim's browser (CWE-346)."
+        ),
+        "impact": (
+            "Unauthorized data exfiltration, CSRF facilitation, and disclosure of authenticated payloads to third-party domains."
+        ),
+        "recommended_fix": (
+            "Replace the wildcard '*' with an explicit whitelist of approved origins. Do not reflect the request Origin header blindly."
+        ),
+        "patch_example": (
+            "```nginx\n"
+            "# Strict Origin whitelist in Nginx\n"
+            "map $http_origin $allowed_origin {\n"
+            "    default '';\n"
+            "    'https://trusted-domain.com' $http_origin;\n"
+            "}\n\n"
+            "server {\n"
+            "    add_header Access-Control-Allow-Origin $allowed_origin always;\n"
+            "    add_header Access-Control-Allow-Methods 'GET, POST, OPTIONS' always;\n"
+            "}\n"
+            "```"
+        ),
+    },
+    "robots_txt_disclosure": {
+        "cwe_id": "CWE-200 (Exposure of Sensitive Information) / CWE-548",
+        "cvss_score": "3.3",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+        "threat_vector": "Automated Reconnaissance / Information Disclosure via Robots.txt",
+        "reproduction_command": "curl -s http://{target}/robots.txt",
+        "verification_test": "curl -s http://{target}/robots.txt | grep -i 'Disallow'",
+
+        "title": "Sensitive Directory & Route Disclosure in Robots.txt",
+        "plain_english_summary": (
+            "The web server discloses confidential or administrative paths in Disallow directives "
+            "within robots.txt, providing attackers with a roadmap of unlinked backend assets (CWE-200)."
+        ),
+        "impact": (
+            "Accelerates adversarial reconnaissance by revealing administrative panels, backup endpoints, and hidden folders."
+        ),
+        "recommended_fix": (
+            "Remove internal or secret routes from robots.txt. Enforce server-side authentication and authorization guards "
+            "on all backend resources rather than relying on search crawler exclusion rules."
+        ),
+        "patch_example": (
+            "```text\n"
+            "# Sanitized robots.txt - exclude search engine indexing without leaking sensitive paths\n"
+            "User-agent: *\n"
+            "Disallow: /search\n"
+            "```"
+        ),
+    },
+    "unauthenticated_api_exposure": {
+        "cwe_id": "CWE-306 (Missing Authentication for Critical Function)",
+        "cvss_score": "7.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+        "threat_vector": "Direct Unauthenticated REST API Access",
+        "reproduction_command": "curl -s http://{target}/api/Challenges",
+        "verification_test": "curl -s -o /dev/null -w '%{http_code}' http://{target}/api/Challenges | grep '401\\|403'",
+
+        "title": "Unauthenticated REST/Administrative API Exposure",
+        "plain_english_summary": (
+            "An internal REST or administrative API endpoint responds with structured application data "
+            "to unauthenticated requests without requiring a valid session, token, or API key (CWE-306)."
+        ),
+        "impact": (
+            "Direct exfiltration of operational metadata, user database entries, challenge states, and business logic bypass."
+        ),
+        "recommended_fix": (
+            "Require robust authentication (e.g. JWT verification, Bearer tokens, or session cookies) "
+            "in the API router middleware before serving requests."
+        ),
+        "patch_example": (
+            "```javascript\n"
+            "// Express.js API authentication guard middleware\n"
+            "const jwt = require('jsonwebtoken');\n\n"
+            "function authenticateToken(req, res, next) {\n"
+            "  const authHeader = req.headers['authorization'];\n"
+            "  const token = authHeader && authHeader.split(' ')[1];\n"
+            "  if (!token) return res.sendStatus(401);\n"
+            "  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {\n"
+            "    if (err) return res.sendStatus(403);\n"
+            "    req.user = user;\n"
+            "    next();\n"
+            "  });\n"
+            "}\n"
+            "app.use('/api', authenticateToken);\n"
+            "```"
+        ),
+    },
+    "directory_listing_disclosure": {
+        "cwe_id": "CWE-548 (Exposure of Information Through Directory Listing)",
+        "cvss_score": "5.3",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+        "threat_vector": "Direct File Browsing / Web Directory Indexing",
+        "reproduction_command": "curl -s http://{target}/ftp/",
+        "verification_test": "curl -s http://{target}/ftp/ | grep -i 'Index of'",
+
+        "title": "Web Directory Indexing / Unprotected File Storage",
+        "plain_english_summary": (
+            "The web server has directory indexing enabled or exposes an unauthenticated file browser (/ftp, /backups), "
+            "allowing external visitors to list and download stored files (CWE-548)."
+        ),
+        "impact": (
+            "Unrestricted downloading of backups, source code, uploaded files, and developer notes."
+        ),
+        "recommended_fix": (
+            "Disable directory listing in the web server configuration and deny public listing of file directories."
+        ),
+        "patch_example": (
+            "```nginx\n"
+            "# Disable directory browsing in Nginx\n"
+            "location /ftp/ {\n"
+            "    autoindex off;\n"
+            "    auth_basic 'Restricted Vault';\n"
+            "    auth_basic_user_file /etc/nginx/.htpasswd;\n"
+            "}\n"
+            "```"
+        ),
+    },
+    "sensitive_file_exposure": {
+        "cwe_id": "CWE-552 (Files or Directories Accessible to External Parties)",
+        "cvss_score": "8.6",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N",
+        "threat_vector": "Direct Path Traversal / Public Dotfile Retrieval",
+        "reproduction_command": "curl -s http://{target}/.env",
+        "verification_test": "curl -s -o /dev/null -w '%{http_code}' http://{target}/.env | grep '403\\|404'",
+
+        "title": "Public Exposure of Operational Dotfile or Version Control Repository",
+        "plain_english_summary": (
+            "Sensitive operational configuration files (.env, .git/HEAD) are directly accessible over HTTP "
+            "without authentication, disclosing secret keys, credentials, or source code version trees (CWE-552)."
+        ),
+        "impact": (
+            "Immediate leak of database passwords, API secret keys, encryption salts, and complete source code repository cloning."
+        ),
+        "recommended_fix": (
+            "Configure the web server to block all requests to hidden files and directories starting with '.'."
+        ),
+        "patch_example": (
+            "```nginx\n"
+            "# Block all hidden files (.env, .git, .htaccess) in Nginx\n"
+            "location ~ /\\.(?!well-known) {\n"
+            "    deny all;\n"
+            "    return 404;\n"
+            "}\n"
+            "```"
         ),
     },
 }
@@ -293,6 +870,13 @@ def _unsafe_function_patch(func_name: str) -> str:
             '    execv("/usr/bin/needed", argv);  /* argv is fixed, not user text */\n'
             "    _exit(127);\n"
             "}"
+        ),
+        "execve": (
+            "/* execve -> validate path against strict allow-list and sanitize envp: */\n"
+            "if (!is_allowed_executable(binary_path)) return -1;\n"
+            "char *const safe_envp[] = {\"PATH=/usr/bin:/bin\", NULL};\n"
+            "execve(binary_path, argv, safe_envp);\n"
+            "_exit(127);"
         ),
     }
     return snippets.get(func_name, "")
@@ -523,6 +1107,12 @@ class RemediationAdvisor:
             "impact": template["impact"],
             "recommended_fix": template["recommended_fix"],
             "patch_example": template["patch_example"],
+            "cwe_id": template.get("cwe_id", "CWE-699"),
+            "cvss_score": template.get("cvss_score", "7.5"),
+            "cvss_vector": template.get("cvss_vector", "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"),
+            "threat_vector": template.get("threat_vector", "Remote Network / Unauthenticated"),
+            "reproduction_command": template.get("reproduction_command", "curl -v http://<target>/"),
+            "verification_test": template.get("verification_test", "curl -v --fail http://<target>/"),
         }
 
         # Tailor with per-finding signals

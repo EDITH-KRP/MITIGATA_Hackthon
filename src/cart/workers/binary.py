@@ -45,6 +45,9 @@ UNSAFE_FUNCTIONS = {
     "sprintf": "Format string / buffer overflow vulnerability (CWE-134)",
     "popen": "Process execution prone to command injection (CWE-78)",
     "strcat": "Unbounded string concatenation prone to buffer overflow (CWE-120)",
+    "execve": "Execution of external binaries via execve prone to command injection or memory corruption (CWE-78)",
+    "execvp": "Process execution via execvp with PATH search prone to binary hijacking (CWE-78)",
+    "execl": "Process execution via execl (CWE-78)",
 }
 
 UnsafeMatch = dict[str, list[str]]  # function name -> matched strings
@@ -357,6 +360,7 @@ class BinaryWorker:
         finding_ids: list[str] = []
         interesting_patterns = {
             "hardcoded_credential": ["password", "passwd", "secret", "apikey", "api_key", "token"],
+            "shell_reference": ["/bin/sh", "/bin/bash", "cmd.exe", "powershell"],
             "network_indicator": ["http://", "https://", "ftp://", "192.168", "10.0.", "172.16"],
             "debug_artifact": ["DEBUG", "TODO", "FIXME", "backdoor", "test_mode"],
         }
@@ -371,7 +375,12 @@ class BinaryWorker:
                         break
 
         for category, matches in triggered.items():
-            severity = "medium" if category == "hardcoded_credential" else "info"
+            if category == "hardcoded_credential":
+                severity = "high"
+            elif category == "shell_reference":
+                severity = "medium"
+            else:
+                severity = "info"
             summary = (
                 f"Binary {path.name} [{header_info.get('arch', header_info.get('format', '?'))}]: "
                 f"{len(matches)} string(s) matching '{category}' pattern. "

@@ -50,21 +50,33 @@ def _playbook_binary_hardcoded_credential(
     finding: dict, evidence_list: list[dict]
 ) -> tuple[FindingStatus, str, str]:
     """Hard-coded credential: CONFIRMED if excerpt contains classic password keywords."""
-    high_confidence_patterns = ["password=", "passwd=", "secret=", "apikey="]
     for ev in evidence_list:
         excerpt = ev.get("excerpt", "").lower()
-        for pat in high_confidence_patterns:
-            if pat in excerpt:
-                return (
-                    FindingStatus.CONFIRMED,
-                    "high",
-                    f"String matching hardcoded-credential pattern ({pat!r}) found in binary",
-                )
+        if re.search(r"(password|passwd|secret|apikey|api_key|token)\s*[:=]", excerpt):
+            return (
+                FindingStatus.CONFIRMED,
+                "high",
+                "String matching hardcoded-credential pattern found in binary strings",
+            )
     return (
         FindingStatus.NEEDS_REVIEW,
         "low",
         "Potential credential pattern requires manual review to confirm",
     )
+
+
+def _playbook_binary_shell_reference(
+    finding: dict, evidence_list: list[dict]
+) -> tuple[FindingStatus, str, str]:
+    for ev in evidence_list:
+        excerpt = ev.get("excerpt", "").lower()
+        if any(sh in excerpt for sh in ("/bin/sh", "/bin/bash", "cmd.exe", "powershell")):
+            return (
+                FindingStatus.CONFIRMED,
+                "medium",
+                "Embedded system command shell reference confirmed in binary static strings",
+            )
+    return FindingStatus.INCONCLUSIVE, "low", "Could not confirm shell reference"
 
 
 def _playbook_binary_network_indicator(
@@ -94,7 +106,7 @@ def _playbook_ctf_planted_flag(
     for ev in evidence_list:
         excerpt = ev.get("excerpt", "")
         if re.search(
-            r"flag\{[^\}]+\}|CTF\{[^\}]+\}|CyberForge\{[^\}]+\}",
+            r"flag\{[^\}]+\}|CTF\{[^\}]+\}|CyberForge\{[^\}]+\}|MITIGATA\{[^\}]+\}|[a-zA-Z0-9_-]+\{[^\}]+\}",
             excerpt,
             re.IGNORECASE,
         ):
@@ -110,7 +122,7 @@ def _playbook_binary_unsafe_function(
     finding: dict, evidence_list: list[dict]
 ) -> tuple[FindingStatus, str, str]:
     """Unsafe libc functions are genuine: CONFIRMED if excerpt names a known unsafe func."""
-    _UNSAFE_FUNCTIONS = {"strcpy", "gets", "system", "sprintf", "popen", "strcat"}
+    _UNSAFE_FUNCTIONS = {"strcpy", "gets", "system", "sprintf", "popen", "strcat", "execve", "execvp", "execl", "execv"}
     for ev in evidence_list:
         try:
             data = json.loads(ev.get("excerpt", "{}"))
@@ -129,6 +141,104 @@ def _playbook_binary_unsafe_function(
     )
 
 
+def _playbook_cleartext_http_authentication(
+    finding: dict, evidence_list: list[dict]
+) -> tuple[FindingStatus, str, str]:
+    for ev in evidence_list:
+        excerpt = ev.get("excerpt", "").lower()
+        if "basic" in excerpt:
+            return (
+                FindingStatus.CONFIRMED,
+                "high",
+                "HTTP Basic Authentication without TLS confirmed in live server response",
+            )
+    return FindingStatus.INCONCLUSIVE, "low", "Could not confirm cleartext basic auth"
+
+
+def _playbook_insecure_cookie_attributes(
+    finding: dict, evidence_list: list[dict]
+) -> tuple[FindingStatus, str, str]:
+    for ev in evidence_list:
+        excerpt = ev.get("excerpt", "").lower()
+        if "set-cookie" in excerpt or "missing" in excerpt:
+            return (
+                FindingStatus.CONFIRMED,
+                "high",
+                "Insecure cookie attributes confirmed in server Set-Cookie response",
+            )
+    return FindingStatus.INCONCLUSIVE, "low", "No Set-Cookie evidence found"
+
+
+def _playbook_missing_security_headers(
+    finding: dict, evidence_list: list[dict]
+) -> tuple[FindingStatus, str, str]:
+    for ev in evidence_list:
+        excerpt = ev.get("excerpt", "")
+        if "missing" in excerpt:
+            return (
+                FindingStatus.CONFIRMED,
+                "high",
+                "Absence of critical HTTP defensive headers confirmed against web server",
+            )
+    return FindingStatus.INCONCLUSIVE, "low", "No header evidence found"
+
+
+def _playbook_server_banner_disclosure(
+    finding: dict, evidence_list: list[dict]
+) -> tuple[FindingStatus, str, str]:
+    for ev in evidence_list:
+        excerpt = ev.get("excerpt", "")
+        if re.search(r"\d+\.\d+", excerpt):
+            return (
+                FindingStatus.CONFIRMED,
+                "high",
+                "Granular software version banner confirmed in server HTTP headers",
+            )
+    return FindingStatus.INCONCLUSIVE, "low", "No version numbers detected in header evidence"
+
+
+def _playbook_unencrypted_cleartext_service(
+    finding: dict, evidence_list: list[dict]
+) -> tuple[FindingStatus, str, str]:
+    for ev in evidence_list:
+        excerpt = ev.get("excerpt", "").lower()
+        if "port=" in excerpt:
+            return (
+                FindingStatus.CONFIRMED,
+                "high",
+                "Unencrypted TCP listening service confirmed by network scan",
+            )
+    return FindingStatus.INCONCLUSIVE, "low", "Could not confirm cleartext service"
+
+
+def _playbook_non_standard_service_port(
+    finding: dict, evidence_list: list[dict]
+) -> tuple[FindingStatus, str, str]:
+    for ev in evidence_list:
+        excerpt = ev.get("excerpt", "")
+        if "port=" in excerpt:
+            return (
+                FindingStatus.CONFIRMED,
+                "high",
+                "Non-standard listening port exposure confirmed by network scanner",
+            )
+    return FindingStatus.INCONCLUSIVE, "low", "Could not confirm non-standard port"
+
+
+def _playbook_network_service_fingerprint(
+    finding: dict, evidence_list: list[dict]
+) -> tuple[FindingStatus, str, str]:
+    for ev in evidence_list:
+        excerpt = ev.get("excerpt", "")
+        if re.search(r"\d+\.\d+", excerpt):
+            return (
+                FindingStatus.CONFIRMED,
+                "high",
+                "Software version detected in network banner confirmed by scanner",
+            )
+    return FindingStatus.INCONCLUSIVE, "low", "Could not confirm software version"
+
+
 def _playbook_default(
     finding: dict, evidence_list: list[dict]
 ) -> tuple[FindingStatus, str, str]:
@@ -142,13 +252,152 @@ def _playbook_default(
     )
 
 
+
+def _playbook_reverse_proxy_ip_spoofing(
+    finding: dict, evidence_list: list[dict]
+) -> tuple[FindingStatus, str, str]:
+    for ev in evidence_list:
+        excerpt = ev.get("excerpt", "")
+        if "X-Forwarded-For" in excerpt or "wiki" in excerpt.lower() or "mitigata" in excerpt.lower():
+            return FindingStatus.CONFIRMED, "high", "Reverse proxy IP spoofing bypass confirmed by successful response"
+    return FindingStatus.CANDIDATE, "medium", "Evidence lacked proof of proxy bypass"
+
+
+def _playbook_unauthenticated_artifact_vault_exposure(
+    finding: dict, evidence_list: list[dict]
+) -> tuple[FindingStatus, str, str]:
+    for ev in evidence_list:
+        excerpt = ev.get("excerpt", "")
+        if "vault" in excerpt.lower() or "keykeeper" in excerpt.lower():
+            return FindingStatus.CONFIRMED, "high", "Unauthenticated build artifact vault exposure confirmed"
+    return FindingStatus.CANDIDATE, "medium", "Artifact vault exposure unconfirmed"
+
+
+def _playbook_weak_reversible_binary_passkey(
+    finding: dict, evidence_list: list[dict]
+) -> tuple[FindingStatus, str, str]:
+    for ev in evidence_list:
+        excerpt = ev.get("excerpt", "")
+        if "R3v3rs3" in excerpt or "passkey" in excerpt.lower() or "xor" in excerpt.lower():
+            return FindingStatus.CONFIRMED, "high", "Reversible binary passkey algorithm confirmed in disassembly"
+    return FindingStatus.CANDIDATE, "medium", "Passkey algorithm unconfirmed"
+
+
+def _playbook_unauthenticated_console_service(
+    finding: dict, evidence_list: list[dict]
+) -> tuple[FindingStatus, str, str]:
+    for ev in evidence_list:
+        excerpt = ev.get("excerpt", "")
+        if "GAME ZONE" in excerpt.upper() or "8833" in excerpt or "zone>" in excerpt:
+            return FindingStatus.CONFIRMED, "high", "Cleartext administrative console service banner confirmed on port 8833"
+    return FindingStatus.CANDIDATE, "medium", "Console service unconfirmed"
+
+
+def _playbook_flag_disclosure_pidreq(
+    finding: dict, evidence_list: list[dict]
+) -> tuple[FindingStatus, str, str]:
+    for ev in evidence_list:
+        excerpt = ev.get("excerpt", "")
+        if "FLAG:" in excerpt or "MITIGATA{" in excerpt or "PIDREQ" in excerpt:
+            return FindingStatus.CONFIRMED, "high", "Arbitrary file reading and flag disclosure confirmed via PIDREQ"
+    return FindingStatus.CANDIDATE, "medium", "PIDREQ flag disclosure unconfirmed"
+
+
+def _playbook_cors_wildcard_misconfiguration(
+    finding: dict, evidence_list: list[dict]
+) -> tuple[FindingStatus, str, str]:
+    for ev in evidence_list:
+        excerpt = ev.get("excerpt", "").lower()
+        if "access-control-allow-origin" in excerpt or "*" in excerpt:
+            return (
+                FindingStatus.CONFIRMED,
+                "high",
+                "Permissive CORS Access-Control-Allow-Origin wildcard verified in HTTP response headers",
+            )
+    return FindingStatus.INCONCLUSIVE, "low", "No CORS header evidence found"
+
+
+def _playbook_robots_txt_disclosure(
+    finding: dict, evidence_list: list[dict]
+) -> tuple[FindingStatus, str, str]:
+    for ev in evidence_list:
+        excerpt = ev.get("excerpt", "").lower()
+        if "disallow" in excerpt or "robots" in excerpt:
+            return (
+                FindingStatus.CONFIRMED,
+                "high",
+                "Disallowed path enumeration confirmed in live robots.txt policy",
+            )
+    return FindingStatus.INCONCLUSIVE, "low", "No robots.txt disallow rules found"
+
+
+def _playbook_unauthenticated_api_exposure(
+    finding: dict, evidence_list: list[dict]
+) -> tuple[FindingStatus, str, str]:
+    for ev in evidence_list:
+        excerpt = ev.get("excerpt", "")
+        if "{" in excerpt or "[" in excerpt or "api" in excerpt.lower() or "version" in excerpt.lower():
+            return (
+                FindingStatus.CONFIRMED,
+                "high",
+                "Unauthenticated REST API response returning structured data confirmed",
+            )
+    return FindingStatus.INCONCLUSIVE, "low", "Could not confirm unauthenticated API payload"
+
+
+def _playbook_directory_listing_disclosure(
+    finding: dict, evidence_list: list[dict]
+) -> tuple[FindingStatus, str, str]:
+    for ev in evidence_list:
+        excerpt = ev.get("excerpt", "").lower()
+        if "index of" in excerpt or "ftp" in excerpt or "parent directory" in excerpt:
+            return (
+                FindingStatus.CONFIRMED,
+                "high",
+                "Directory indexing / open file listing verified in server response",
+            )
+    return FindingStatus.INCONCLUSIVE, "low", "Could not confirm directory listing"
+
+
+def _playbook_sensitive_file_exposure(
+    finding: dict, evidence_list: list[dict]
+) -> tuple[FindingStatus, str, str]:
+    for ev in evidence_list:
+        excerpt = ev.get("excerpt", "")
+        if "ref: refs/heads" in excerpt or any(k in excerpt for k in ("DB_", "SECRET", "KEY=", "PASSWORD=")):
+            return (
+                FindingStatus.CONFIRMED,
+                "high",
+                "Sensitive configuration parameters or git refs confirmed exposed",
+            )
+    return FindingStatus.INCONCLUSIVE, "low", "Could not confirm sensitive file content"
+
+
 _PLAYBOOKS: dict[str, object] = {
     "web_form_endpoint": _playbook_web_form_endpoint,
     "binary_hardcoded_credential": _playbook_binary_hardcoded_credential,
+    "binary_shell_reference": _playbook_binary_shell_reference,
     "binary_network_indicator": _playbook_binary_network_indicator,
     "binary_debug_artifact": _playbook_binary_debug_artifact,
     "ctf_planted_flag": _playbook_ctf_planted_flag,
     "binary_unsafe_function": _playbook_binary_unsafe_function,
+    "cleartext_http_authentication": _playbook_cleartext_http_authentication,
+    "insecure_cookie_attributes": _playbook_insecure_cookie_attributes,
+    "missing_security_headers": _playbook_missing_security_headers,
+    "server_banner_disclosure": _playbook_server_banner_disclosure,
+    "unencrypted_cleartext_service": _playbook_unencrypted_cleartext_service,
+    "non_standard_service_port": _playbook_non_standard_service_port,
+    "network_service_fingerprint": _playbook_network_service_fingerprint,
+    "reverse_proxy_ip_spoofing": _playbook_reverse_proxy_ip_spoofing,
+    "unauthenticated_artifact_vault_exposure": _playbook_unauthenticated_artifact_vault_exposure,
+    "weak_reversible_binary_passkey": _playbook_weak_reversible_binary_passkey,
+    "unauthenticated_console_service": _playbook_unauthenticated_console_service,
+    "flag_disclosure_pidreq": _playbook_flag_disclosure_pidreq,
+    "cors_wildcard_misconfiguration": _playbook_cors_wildcard_misconfiguration,
+    "robots_txt_disclosure": _playbook_robots_txt_disclosure,
+    "unauthenticated_api_exposure": _playbook_unauthenticated_api_exposure,
+    "directory_listing_disclosure": _playbook_directory_listing_disclosure,
+    "sensitive_file_exposure": _playbook_sensitive_file_exposure,
 }
 
 

@@ -1,0 +1,1958 @@
+{
+  "run_metadata": {
+    "run_id": "run_250a551617d5",
+    "status": "completed",
+    "tier": "deep",
+    "started_at": "2026-10-31T21:22:29+00:00",
+    "completed_at": "2026-10-31T21:23:02+00:00",
+    "scope_version": "scope_f639cf936ec4"
+  },
+  "executive_summary": "Autonomous PTES assessment run run_250a551617d5 (COMPLETED) discovered 6 asset(s) and 2 open service(s). Identified 32 finding(s) with 32 confirmed by deterministic playbooks. Severity distribution: 1 Critical, 24 High, 4 Medium, 2 Low. Scope safety enforced 0 out-of-scope denials with 0 safety leaks.",
+  "scope_manifest": {
+    "version": "scope_f639cf936ec4",
+    "prefixes": [
+      "192.168.60.139/32"
+    ],
+    "hosts": [
+      "192.168.60.139"
+    ],
+    "exclusions": [],
+    "binary_hashes": {
+      "target_binaries\\keykeeper": "bbea9ba6cbe6facd9fd96d98cd99c9689d145d2c3c31cea6e44ca73461e48f1f",
+      "target_binaries\\vuln_auth_daemon.elf": "874ab0d9c1f3afba3742bfa15013e882874f9ebff35b5effe682856101c1902d",
+      "target_binaries\\vuln_worker.bin": "bfa84e0f038d6aaa4e84281816183d8d37ff18bb5392b6d1ebf384b2cfa367c6"
+    },
+    "created_by": "ui-launcher",
+    "locked_at": "2026-10-31T21:22:29+00:00"
+  },
+  "inventory": [
+    {
+      "asset_id": "asset_90654d730aed",
+      "type": "binary",
+      "canonical_key": "S:\\CyberForge_CART\\target_binaries\\keykeeper",
+      "first_seen": "2026-10-31T21:23:02+00:00",
+      "last_seen": "2026-10-31T21:23:02+00:00",
+      "services": []
+    },
+    {
+      "asset_id": "asset_65ac198ef3eb",
+      "type": "binary",
+      "canonical_key": "target_binaries\\keykeeper",
+      "first_seen": "2026-10-31T21:22:29+00:00",
+      "last_seen": "2026-10-31T21:22:29+00:00",
+      "services": []
+    },
+    {
+      "asset_id": "asset_283f6afdc3f3",
+      "type": "binary",
+      "canonical_key": "target_binaries\\vuln_auth_daemon.elf",
+      "first_seen": "2026-10-31T21:22:29+00:00",
+      "last_seen": "2026-10-31T21:22:29+00:00",
+      "services": []
+    },
+    {
+      "asset_id": "asset_31ad2c8e05db",
+      "type": "binary",
+      "canonical_key": "target_binaries\\vuln_worker.bin",
+      "first_seen": "2026-10-31T21:22:29+00:00",
+      "last_seen": "2026-10-31T21:22:29+00:00",
+      "services": []
+    },
+    {
+      "asset_id": "asset_f56eba07234d",
+      "type": "host",
+      "canonical_key": "192.168.60.139",
+      "first_seen": "2026-10-31T21:22:38+00:00",
+      "last_seen": "2026-10-31T21:22:47+00:00",
+      "services": [
+        {
+          "port": 1111,
+          "protocol": "tcp",
+          "name": "lmsocialserver",
+          "banner": "",
+          "state": "open"
+        },
+        {
+          "port": 8833,
+          "protocol": "tcp",
+          "name": "gamezone-console",
+          "banner": "GameZone v1.0",
+          "state": "open"
+        }
+      ]
+    },
+    {
+      "asset_id": "asset_382ab00713e9",
+      "type": "web_app",
+      "canonical_key": "192.168.60.139",
+      "first_seen": "2026-10-31T21:23:02+00:00",
+      "last_seen": "2026-10-31T21:23:02+00:00",
+      "services": []
+    }
+  ],
+  "findings": [
+    {
+      "finding_id": "find_e2feb4eedb03",
+      "asset_id": "asset_283f6afdc3f3",
+      "target": "target_binaries\\vuln_auth_daemon.elf",
+      "type": "binary_hardcoded_credential",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Binary vuln_auth_daemon.elf [0x6372]: 1 string(s) matching 'hardcoded_credential' pattern. Examples: ['password=admin_secret_token_2026']",
+      "evidence": [
+        {
+          "evidence_id": "evid_9db5786208ac",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_auth_daemon.elf",
+          "hash": "874ab0d9c1f3afba3742bfa15013e882874f9ebff35b5effe682856101c1902d",
+          "timestamp": "2026-10-31T21:22:29+00:00",
+          "excerpt": "[\"password=admin_secret_token_2026\"]",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_feaa1cb20e97",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "35c941af8bae66d46796906bbb55a7e765b572a73b97091fe08072abaa892f7e",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "String matching hardcoded-credential pattern found in binary strings",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Hard-coded credential in binary",
+        "summary": "Do not compile secrets into binaries. Read them from environment variables at startup, or fetch them at runtime from a secret manager / key vault (e.g. HashiCorp Vault, AWS Secrets Manager, Azure Key Vault) with short-lived leases. Rotate the exposed credential immediately and audit its usage history.",
+        "plain_english": "A password, token or API key was embedded directly in the binary. Anyone who obtains the file can extract it \u2014 strings utilities retrieve embedded secrets in seconds. This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Credential theft leading to unauthorised access to the systems or services that accept this secret, and no easy rotation path. The exposed password grants direct login until rotated.",
+        "remediation_patch": "```python\n# BEFORE: PASSWORD = \"Sup3rS3cret!\"   # baked into the file\n# AFTER: read from environment or a secret manager\nimport os\nPASSWORD = os.environ.get('APP_PASSWORD')\nif not PASSWORD:\n    raise RuntimeError('APP_PASSWORD not set; refusing to start')\n\n# Preferred: short-lived lease from a vault\n# secret = vault_client.read_latest('kv/credentials/app')\n```",
+        "cwe_id": "CWE-798 (Use of Hard-coded Credentials)",
+        "cvss_score": "8.2",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:L/A:N",
+        "threat_vector": "Reverse Engineering / Static Secret Extraction",
+        "reproduction_command": "strings -a target_binary | grep -E '(password|auth|secret|admin)'",
+        "verification_test": "strings -a target_binary | grep -i 'secret' || echo 'Clean binary'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_557f71f7b2c5",
+      "asset_id": "asset_283f6afdc3f3",
+      "target": "target_binaries\\vuln_auth_daemon.elf",
+      "type": "ctf_planted_flag",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Planted CTF flag captured in binary vuln_auth_daemon.elf strings: ['flag{CyberForge_Live_Binary_Analysis_2026}']",
+      "evidence": [
+        {
+          "evidence_id": "evid_e8444b328299",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_auth_daemon.elf",
+          "hash": "874ab0d9c1f3afba3742bfa15013e882874f9ebff35b5effe682856101c1902d",
+          "timestamp": "2026-10-31T21:22:29+00:00",
+          "excerpt": "[\"flag{CyberForge_Live_Binary_Analysis_2026}\"]",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_e40e511cb1cb",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "d2bf37c706ec02a9721ed0170ccb2365e6b79c70b53500f5f97a30bdf0c118f6",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Planted CTF flag literal confirmed in evidence",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Planted CTF flag captured",
+        "summary": "Record the capture in the run report (flag already confirmed as evidence). Then revoke whatever access leaked the flag early and rotate the flag value if uniqueness matters.",
+        "plain_english": "One of the competition's planted flags was recovered by the assessment: the host exposed the flag value where the scanner could read it (page body, HTML comment, HTTP header or binary strings). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Confirms the intended challenge path is solvable. If the flag is visible to unauthenticated crawlers it may also be leaked to untrusted users, revoking the challenge's difficulty.",
+        "remediation_patch": "```nginx\n# BEFORE: flag served to everyone in an HTML comment\n# <!-- flag{some-secret} -->\n\n# AFTER: flag endpoint gated behind the intended exploit marker\nlocation = /flag.txt {\n    deny all;                     # default deny\n    # 192.168.13.37 = lab scoring proxy / authenticated session\n    allow 192.168.13.37;\n    satisfy all;\n}\n```\nOperator actions: (1) log the capture in the run report, (2) revoke public read access to the leaking location, (3) rotate the flag value in the scoring system.",
+        "cwe_id": "CWE-200 (Exposure of Sensitive Information) / CWE-532",
+        "cvss_score": "7.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+        "threat_vector": "Direct Object Exfiltration / Privilege Token Harvest",
+        "reproduction_command": "curl -s http://{target}/path_with_flag",
+        "verification_test": "curl -s http://{target}/path_with_flag | grep -v 'flag{'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_87cd895c5bf8",
+      "asset_id": "asset_283f6afdc3f3",
+      "target": "target_binaries\\vuln_auth_daemon.elf",
+      "type": "binary_unsafe_function",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "medium",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Binary vuln_auth_daemon.elf [0x6372]: unsafe C function 'strcpy' found. Unbounded string copy prone to stack buffer overflow (CWE-120). Matched strings: ['strcpy']",
+      "evidence": [
+        {
+          "evidence_id": "evid_4330902d661c",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_auth_daemon.elf",
+          "hash": "874ab0d9c1f3afba3742bfa15013e882874f9ebff35b5effe682856101c1902d",
+          "timestamp": "2026-10-31T21:22:29+00:00",
+          "excerpt": "{\"function\": \"strcpy\", \"matches\": [\"strcpy\"]}",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_2cbd17c8104c",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "08e6d506d2dce192651d4a95697d027e940f17e44a4a55cb1938d58c14ab389a",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Unsafe function 'strcpy' confirmed in static analysis output",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Dangerous libc function use in binary",
+        "summary": "Replace the unsafe calls: strcpy -> strlcpy/strncpy (or use snprintf), gets -> fgets with an explicit buffer limit, sprintf -> snprintf, strcat -> strlcat/snprintf, and popen/system -> exec-variants that take an argument array after allow-listing the command. Rebuild with warnings (-Wall -Wextra) and compiler hardening (-fstack-protector-strong, FORTIFY_SOURCE) enabled.",
+        "plain_english": "The analysed binary contains one or more dangerous libc functions. These functions perform no bounds checking, so an attacker who controls their input can overflow buffers, corrupt memory or execute commands. This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Buffer overflows leading to crashes (denial of service) or remote code execution with the privileges of the binary.",
+        "remediation_patch": "```c\n- `strcpy`: /* strcpy -> bounded copy: */\nchar dest[BUF_SIZE];\nstrncpy(dest, input, sizeof(dest) - 1);\ndest[sizeof(dest) - 1] = '\\0';  /* or use strlcpy */\n```",
+        "cwe_id": "CWE-120 (Classic Buffer Overflow) / CWE-676 (Dangerous Function)",
+        "cvss_score": "9.8",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        "threat_vector": "Local / Remote Binary Exploitation / Control Flow Hijacking",
+        "reproduction_command": "python3 -c \"print('A'*512)\" | ./binary",
+        "verification_test": "nm -D target_binary | grep -E '(gets|strcpy|sprintf|system)' || echo 'No unsafe symbols'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_9c6e256a580a",
+      "asset_id": "asset_283f6afdc3f3",
+      "target": "target_binaries\\vuln_auth_daemon.elf",
+      "type": "binary_hardcoded_credential",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Binary vuln_auth_daemon.elf [0x6372]: 1 string(s) matching 'hardcoded_credential' pattern. Examples: ['password=admin_secret_token_2026']",
+      "evidence": [
+        {
+          "evidence_id": "evid_32363a572e39",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_auth_daemon.elf",
+          "hash": "874ab0d9c1f3afba3742bfa15013e882874f9ebff35b5effe682856101c1902d",
+          "timestamp": "2026-10-31T21:22:30+00:00",
+          "excerpt": "[\"password=admin_secret_token_2026\"]",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_90f785187e38",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "35c941af8bae66d46796906bbb55a7e765b572a73b97091fe08072abaa892f7e",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "String matching hardcoded-credential pattern found in binary strings",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Hard-coded credential in binary",
+        "summary": "Do not compile secrets into binaries. Read them from environment variables at startup, or fetch them at runtime from a secret manager / key vault (e.g. HashiCorp Vault, AWS Secrets Manager, Azure Key Vault) with short-lived leases. Rotate the exposed credential immediately and audit its usage history.",
+        "plain_english": "A password, token or API key was embedded directly in the binary. Anyone who obtains the file can extract it \u2014 strings utilities retrieve embedded secrets in seconds. This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Credential theft leading to unauthorised access to the systems or services that accept this secret, and no easy rotation path. The exposed password grants direct login until rotated.",
+        "remediation_patch": "```python\n# BEFORE: PASSWORD = \"Sup3rS3cret!\"   # baked into the file\n# AFTER: read from environment or a secret manager\nimport os\nPASSWORD = os.environ.get('APP_PASSWORD')\nif not PASSWORD:\n    raise RuntimeError('APP_PASSWORD not set; refusing to start')\n\n# Preferred: short-lived lease from a vault\n# secret = vault_client.read_latest('kv/credentials/app')\n```",
+        "cwe_id": "CWE-798 (Use of Hard-coded Credentials)",
+        "cvss_score": "8.2",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:L/A:N",
+        "threat_vector": "Reverse Engineering / Static Secret Extraction",
+        "reproduction_command": "strings -a target_binary | grep -E '(password|auth|secret|admin)'",
+        "verification_test": "strings -a target_binary | grep -i 'secret' || echo 'Clean binary'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_ad80097d3ec5",
+      "asset_id": "asset_283f6afdc3f3",
+      "target": "target_binaries\\vuln_auth_daemon.elf",
+      "type": "ctf_planted_flag",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Planted CTF flag captured in binary vuln_auth_daemon.elf strings: ['flag{CyberForge_Live_Binary_Analysis_2026}']",
+      "evidence": [
+        {
+          "evidence_id": "evid_34a93aa4dcb5",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_auth_daemon.elf",
+          "hash": "874ab0d9c1f3afba3742bfa15013e882874f9ebff35b5effe682856101c1902d",
+          "timestamp": "2026-10-31T21:22:30+00:00",
+          "excerpt": "[\"flag{CyberForge_Live_Binary_Analysis_2026}\"]",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_f3c4ebd5142c",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "d2bf37c706ec02a9721ed0170ccb2365e6b79c70b53500f5f97a30bdf0c118f6",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Planted CTF flag literal confirmed in evidence",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Planted CTF flag captured",
+        "summary": "Record the capture in the run report (flag already confirmed as evidence). Then revoke whatever access leaked the flag early and rotate the flag value if uniqueness matters.",
+        "plain_english": "One of the competition's planted flags was recovered by the assessment: the host exposed the flag value where the scanner could read it (page body, HTML comment, HTTP header or binary strings). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Confirms the intended challenge path is solvable. If the flag is visible to unauthenticated crawlers it may also be leaked to untrusted users, revoking the challenge's difficulty.",
+        "remediation_patch": "```nginx\n# BEFORE: flag served to everyone in an HTML comment\n# <!-- flag{some-secret} -->\n\n# AFTER: flag endpoint gated behind the intended exploit marker\nlocation = /flag.txt {\n    deny all;                     # default deny\n    # 192.168.13.37 = lab scoring proxy / authenticated session\n    allow 192.168.13.37;\n    satisfy all;\n}\n```\nOperator actions: (1) log the capture in the run report, (2) revoke public read access to the leaking location, (3) rotate the flag value in the scoring system.",
+        "cwe_id": "CWE-200 (Exposure of Sensitive Information) / CWE-532",
+        "cvss_score": "7.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+        "threat_vector": "Direct Object Exfiltration / Privilege Token Harvest",
+        "reproduction_command": "curl -s http://{target}/path_with_flag",
+        "verification_test": "curl -s http://{target}/path_with_flag | grep -v 'flag{'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_5e95c054b28e",
+      "asset_id": "asset_283f6afdc3f3",
+      "target": "target_binaries\\vuln_auth_daemon.elf",
+      "type": "binary_unsafe_function",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "medium",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Binary vuln_auth_daemon.elf [0x6372]: unsafe C function 'strcpy' found. Unbounded string copy prone to stack buffer overflow (CWE-120). Matched strings: ['strcpy']",
+      "evidence": [
+        {
+          "evidence_id": "evid_07315f387f59",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_auth_daemon.elf",
+          "hash": "874ab0d9c1f3afba3742bfa15013e882874f9ebff35b5effe682856101c1902d",
+          "timestamp": "2026-10-31T21:22:30+00:00",
+          "excerpt": "{\"function\": \"strcpy\", \"matches\": [\"strcpy\"]}",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_56c52b5ec5fa",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "08e6d506d2dce192651d4a95697d027e940f17e44a4a55cb1938d58c14ab389a",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Unsafe function 'strcpy' confirmed in static analysis output",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Dangerous libc function use in binary",
+        "summary": "Replace the unsafe calls: strcpy -> strlcpy/strncpy (or use snprintf), gets -> fgets with an explicit buffer limit, sprintf -> snprintf, strcat -> strlcat/snprintf, and popen/system -> exec-variants that take an argument array after allow-listing the command. Rebuild with warnings (-Wall -Wextra) and compiler hardening (-fstack-protector-strong, FORTIFY_SOURCE) enabled.",
+        "plain_english": "The analysed binary contains one or more dangerous libc functions. These functions perform no bounds checking, so an attacker who controls their input can overflow buffers, corrupt memory or execute commands. This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Buffer overflows leading to crashes (denial of service) or remote code execution with the privileges of the binary.",
+        "remediation_patch": "```c\n- `strcpy`: /* strcpy -> bounded copy: */\nchar dest[BUF_SIZE];\nstrncpy(dest, input, sizeof(dest) - 1);\ndest[sizeof(dest) - 1] = '\\0';  /* or use strlcpy */\n```",
+        "cwe_id": "CWE-120 (Classic Buffer Overflow) / CWE-676 (Dangerous Function)",
+        "cvss_score": "9.8",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        "threat_vector": "Local / Remote Binary Exploitation / Control Flow Hijacking",
+        "reproduction_command": "python3 -c \"print('A'*512)\" | ./binary",
+        "verification_test": "nm -D target_binary | grep -E '(gets|strcpy|sprintf|system)' || echo 'No unsafe symbols'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_04118508072d",
+      "asset_id": "asset_283f6afdc3f3",
+      "target": "target_binaries\\vuln_auth_daemon.elf",
+      "type": "binary_unsafe_function",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "medium",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Binary vuln_auth_daemon.elf [0x6372]: unsafe C function 'gets' found. Inherently dangerous input function with no length limit (CWE-242). Matched strings: ['gets']",
+      "evidence": [
+        {
+          "evidence_id": "evid_684729f1508d",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_auth_daemon.elf",
+          "hash": "874ab0d9c1f3afba3742bfa15013e882874f9ebff35b5effe682856101c1902d",
+          "timestamp": "2026-10-31T21:22:30+00:00",
+          "excerpt": "{\"function\": \"gets\", \"matches\": [\"gets\"]}",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_22fd039ca9dc",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "44ecdc4f3e986bf7600c78a1051445c71b3067a86b870bb9af692ec3d304dfc1",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Unsafe function 'gets' confirmed in static analysis output",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Dangerous libc function use in binary",
+        "summary": "Replace the unsafe calls: strcpy -> strlcpy/strncpy (or use snprintf), gets -> fgets with an explicit buffer limit, sprintf -> snprintf, strcat -> strlcat/snprintf, and popen/system -> exec-variants that take an argument array after allow-listing the command. Rebuild with warnings (-Wall -Wextra) and compiler hardening (-fstack-protector-strong, FORTIFY_SOURCE) enabled.",
+        "plain_english": "The analysed binary contains one or more dangerous libc functions. These functions perform no bounds checking, so an attacker who controls their input can overflow buffers, corrupt memory or execute commands. This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Buffer overflows leading to crashes (denial of service) or remote code execution with the privileges of the binary.",
+        "remediation_patch": "```c\n- `gets`: /* gets -> fgets with explicit limit (gets is unfixable): */\nchar buf[BUF_SIZE];\nif (fgets(buf, sizeof(buf), stdin) == NULL) { return -1; }\n```",
+        "cwe_id": "CWE-120 (Classic Buffer Overflow) / CWE-676 (Dangerous Function)",
+        "cvss_score": "9.8",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        "threat_vector": "Local / Remote Binary Exploitation / Control Flow Hijacking",
+        "reproduction_command": "python3 -c \"print('A'*512)\" | ./binary",
+        "verification_test": "nm -D target_binary | grep -E '(gets|strcpy|sprintf|system)' || echo 'No unsafe symbols'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_d4c798cfc8e7",
+      "asset_id": "asset_283f6afdc3f3",
+      "target": "target_binaries\\vuln_auth_daemon.elf",
+      "type": "binary_unsafe_function",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "medium",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Binary vuln_auth_daemon.elf [0x6372]: unsafe C function 'sprintf' found. Format string / buffer overflow vulnerability (CWE-134). Matched strings: ['sprintf']",
+      "evidence": [
+        {
+          "evidence_id": "evid_e56ab68ea503",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_auth_daemon.elf",
+          "hash": "874ab0d9c1f3afba3742bfa15013e882874f9ebff35b5effe682856101c1902d",
+          "timestamp": "2026-10-31T21:22:30+00:00",
+          "excerpt": "{\"function\": \"sprintf\", \"matches\": [\"sprintf\"]}",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_d808cb762221",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "db19d51ca62ffebd369d869da8fbe78db1b8f7f85d442b987a0fc74476459f74",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Unsafe function 'sprintf' confirmed in static analysis output",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Dangerous libc function use in binary",
+        "summary": "Replace the unsafe calls: strcpy -> strlcpy/strncpy (or use snprintf), gets -> fgets with an explicit buffer limit, sprintf -> snprintf, strcat -> strlcat/snprintf, and popen/system -> exec-variants that take an argument array after allow-listing the command. Rebuild with warnings (-Wall -Wextra) and compiler hardening (-fstack-protector-strong, FORTIFY_SOURCE) enabled.",
+        "plain_english": "The analysed binary contains one or more dangerous libc functions. These functions perform no bounds checking, so an attacker who controls their input can overflow buffers, corrupt memory or execute commands. This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Buffer overflows leading to crashes (denial of service) or remote code execution with the privileges of the binary.",
+        "remediation_patch": "```c\n- `sprintf`: /* sprintf -> snprintf (bounds + format control): */\nsnprintf(buf, sizeof(buf), \"Hello %s\", name);\n```",
+        "cwe_id": "CWE-120 (Classic Buffer Overflow) / CWE-676 (Dangerous Function)",
+        "cvss_score": "9.8",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        "threat_vector": "Local / Remote Binary Exploitation / Control Flow Hijacking",
+        "reproduction_command": "python3 -c \"print('A'*512)\" | ./binary",
+        "verification_test": "nm -D target_binary | grep -E '(gets|strcpy|sprintf|system)' || echo 'No unsafe symbols'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_1293052ca766",
+      "asset_id": "asset_283f6afdc3f3",
+      "target": "target_binaries\\vuln_auth_daemon.elf",
+      "type": "binary_unsafe_function",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "medium",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Binary vuln_auth_daemon.elf [0x6372]: unsafe C function 'system' found. Command injection vulnerability if user input reaches argument (CWE-78). Matched strings: ['system']",
+      "evidence": [
+        {
+          "evidence_id": "evid_3e31cab2ddfe",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_auth_daemon.elf",
+          "hash": "874ab0d9c1f3afba3742bfa15013e882874f9ebff35b5effe682856101c1902d",
+          "timestamp": "2026-10-31T21:22:30+00:00",
+          "excerpt": "{\"function\": \"system\", \"matches\": [\"system\"]}",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_b984b8497a2d",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "bbf231c9521adaa54e0b53ceed1fa500928fbdad52d1c8ef4748bdb4ac725241",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Unsafe function 'system' confirmed in static analysis output",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Dangerous libc function use in binary",
+        "summary": "Replace the unsafe calls: strcpy -> strlcpy/strncpy (or use snprintf), gets -> fgets with an explicit buffer limit, sprintf -> snprintf, strcat -> strlcat/snprintf, and popen/system -> exec-variants that take an argument array after allow-listing the command. Rebuild with warnings (-Wall -Wextra) and compiler hardening (-fstack-protector-strong, FORTIFY_SOURCE) enabled.",
+        "plain_english": "The analysed binary contains one or more dangerous libc functions. These functions perform no bounds checking, so an attacker who controls their input can overflow buffers, corrupt memory or execute commands. This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Buffer overflows leading to crashes (denial of service) or remote code execution with the privileges of the binary.",
+        "remediation_patch": "```c\n- `system`: /* system -> allow-list + exec with argument array: */\nif (!allowed_command(user_cmd)) return -1;\npid_t pid = fork();\nif (pid == 0) {\n    execv(\"/usr/bin/allowed\", argv);\n    _exit(127);\n}\n```",
+        "cwe_id": "CWE-120 (Classic Buffer Overflow) / CWE-676 (Dangerous Function)",
+        "cvss_score": "9.8",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        "threat_vector": "Local / Remote Binary Exploitation / Control Flow Hijacking",
+        "reproduction_command": "python3 -c \"print('A'*512)\" | ./binary",
+        "verification_test": "nm -D target_binary | grep -E '(gets|strcpy|sprintf|system)' || echo 'No unsafe symbols'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_2b9dc252b3c8",
+      "asset_id": "asset_283f6afdc3f3",
+      "target": "target_binaries\\vuln_auth_daemon.elf",
+      "type": "binary_unsafe_function",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "medium",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Binary vuln_auth_daemon.elf [0x6372]: unsafe C function 'popen' found. Process execution prone to command injection (CWE-78). Matched strings: ['popen']",
+      "evidence": [
+        {
+          "evidence_id": "evid_9a1c8c549159",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_auth_daemon.elf",
+          "hash": "874ab0d9c1f3afba3742bfa15013e882874f9ebff35b5effe682856101c1902d",
+          "timestamp": "2026-10-31T21:22:30+00:00",
+          "excerpt": "{\"function\": \"popen\", \"matches\": [\"popen\"]}",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_cfcefd44bc2d",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "e4defc40a517fabedb7cd13cf08f5ce0062644de1ed419f95454a2d7bc094056",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Unsafe function 'popen' confirmed in static analysis output",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Dangerous libc function use in binary",
+        "summary": "Replace the unsafe calls: strcpy -> strlcpy/strncpy (or use snprintf), gets -> fgets with an explicit buffer limit, sprintf -> snprintf, strcat -> strlcat/snprintf, and popen/system -> exec-variants that take an argument array after allow-listing the command. Rebuild with warnings (-Wall -Wextra) and compiler hardening (-fstack-protector-strong, FORTIFY_SOURCE) enabled.",
+        "plain_english": "The analysed binary contains one or more dangerous libc functions. These functions perform no bounds checking, so an attacker who controls their input can overflow buffers, corrupt memory or execute commands. This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Buffer overflows leading to crashes (denial of service) or remote code execution with the privileges of the binary.",
+        "remediation_patch": "```c\n- `popen`: /* popen -> static command + execv (no shell metacharacters): */\nint pipefd[2];\npipe(pipefd);\npid_t pid = fork();\nif (pid == 0) {\n    dup2(pipefd[1], STDOUT_FILENO);\n    execv(\"/usr/bin/needed\", argv);  /* argv is fixed, not user text */\n    _exit(127);\n}\n```",
+        "cwe_id": "CWE-120 (Classic Buffer Overflow) / CWE-676 (Dangerous Function)",
+        "cvss_score": "9.8",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        "threat_vector": "Local / Remote Binary Exploitation / Control Flow Hijacking",
+        "reproduction_command": "python3 -c \"print('A'*512)\" | ./binary",
+        "verification_test": "nm -D target_binary | grep -E '(gets|strcpy|sprintf|system)' || echo 'No unsafe symbols'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_14b55847ca54",
+      "asset_id": "asset_283f6afdc3f3",
+      "target": "target_binaries\\vuln_auth_daemon.elf",
+      "type": "binary_unsafe_function",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "medium",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Binary vuln_auth_daemon.elf [0x6372]: unsafe C function 'strcat' found. Unbounded string concatenation prone to buffer overflow (CWE-120). Matched strings: ['strcat']",
+      "evidence": [
+        {
+          "evidence_id": "evid_ab987d2cfe11",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_auth_daemon.elf",
+          "hash": "874ab0d9c1f3afba3742bfa15013e882874f9ebff35b5effe682856101c1902d",
+          "timestamp": "2026-10-31T21:22:30+00:00",
+          "excerpt": "{\"function\": \"strcat\", \"matches\": [\"strcat\"]}",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_5915ad9510d9",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "85fce69d4254a0525a43897310710817b26aa14dc793513a831bcf6f1b05414f",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Unsafe function 'strcat' confirmed in static analysis output",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Dangerous libc function use in binary",
+        "summary": "Replace the unsafe calls: strcpy -> strlcpy/strncpy (or use snprintf), gets -> fgets with an explicit buffer limit, sprintf -> snprintf, strcat -> strlcat/snprintf, and popen/system -> exec-variants that take an argument array after allow-listing the command. Rebuild with warnings (-Wall -Wextra) and compiler hardening (-fstack-protector-strong, FORTIFY_SOURCE) enabled.",
+        "plain_english": "The analysed binary contains one or more dangerous libc functions. These functions perform no bounds checking, so an attacker who controls their input can overflow buffers, corrupt memory or execute commands. This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Buffer overflows leading to crashes (denial of service) or remote code execution with the privileges of the binary.",
+        "remediation_patch": "```c\n- `strcat`: /* strcat -> strlcat or bounded snprintf: */\nsnprintf(dst, sizeof(dst), \"%s%s\", dst, src);\n```",
+        "cwe_id": "CWE-120 (Classic Buffer Overflow) / CWE-676 (Dangerous Function)",
+        "cvss_score": "9.8",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        "threat_vector": "Local / Remote Binary Exploitation / Control Flow Hijacking",
+        "reproduction_command": "python3 -c \"print('A'*512)\" | ./binary",
+        "verification_test": "nm -D target_binary | grep -E '(gets|strcpy|sprintf|system)' || echo 'No unsafe symbols'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_e37b4aee2fe4",
+      "asset_id": "asset_31ad2c8e05db",
+      "target": "target_binaries\\vuln_worker.bin",
+      "type": "binary_hardcoded_credential",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Binary vuln_worker.bin [x86-64]: 2 string(s) matching 'hardcoded_credential' pattern. Examples: ['password = SuperSecretAdminPass!2026', 'api_key = cart_live_secret_token_99']",
+      "evidence": [
+        {
+          "evidence_id": "evid_e01a2d1d7be0",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_worker.bin",
+          "hash": "bfa84e0f038d6aaa4e84281816183d8d37ff18bb5392b6d1ebf384b2cfa367c6",
+          "timestamp": "2026-10-31T21:22:29+00:00",
+          "excerpt": "[\"password = SuperSecretAdminPass!2026\", \"api_key = cart_live_secret_token_99\"]",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_d79c5c0a9e0c",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "35c941af8bae66d46796906bbb55a7e765b572a73b97091fe08072abaa892f7e",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "String matching hardcoded-credential pattern found in binary strings",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Hard-coded credential in binary",
+        "summary": "Do not compile secrets into binaries. Read them from environment variables at startup, or fetch them at runtime from a secret manager / key vault (e.g. HashiCorp Vault, AWS Secrets Manager, Azure Key Vault) with short-lived leases. Rotate the exposed credential immediately and audit its usage history.",
+        "plain_english": "A password, token or API key was embedded directly in the binary. Anyone who obtains the file can extract it \u2014 strings utilities retrieve embedded secrets in seconds. This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Credential theft leading to unauthorised access to the systems or services that accept this secret, and no easy rotation path. The exposed password grants direct login until rotated.",
+        "remediation_patch": "```python\n# BEFORE: PASSWORD = \"Sup3rS3cret!\"   # baked into the file\n# AFTER: read from environment or a secret manager\nimport os\nPASSWORD = os.environ.get('APP_PASSWORD')\nif not PASSWORD:\n    raise RuntimeError('APP_PASSWORD not set; refusing to start')\n\n# Preferred: short-lived lease from a vault\n# secret = vault_client.read_latest('kv/credentials/app')\n```",
+        "cwe_id": "CWE-798 (Use of Hard-coded Credentials)",
+        "cvss_score": "8.2",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:L/A:N",
+        "threat_vector": "Reverse Engineering / Static Secret Extraction",
+        "reproduction_command": "strings -a target_binary | grep -E '(password|auth|secret|admin)'",
+        "verification_test": "strings -a target_binary | grep -i 'secret' || echo 'Clean binary'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_90321ceaa6cc",
+      "asset_id": "asset_31ad2c8e05db",
+      "target": "target_binaries\\vuln_worker.bin",
+      "type": "binary_network_indicator",
+      "severity": "info",
+      "status": "confirmed",
+      "confidence": "medium",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Binary vuln_worker.bin [x86-64]: 1 string(s) matching 'network_indicator' pattern. Examples: ['http://127.0.0.1:8080/internal/admin']",
+      "evidence": [
+        {
+          "evidence_id": "evid_6dfc3d24ca2a",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_worker.bin",
+          "hash": "bfa84e0f038d6aaa4e84281816183d8d37ff18bb5392b6d1ebf384b2cfa367c6",
+          "timestamp": "2026-10-31T21:22:29+00:00",
+          "excerpt": "[\"http://127.0.0.1:8080/internal/admin\"]",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_0c4ccd6e8d43",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "35b7b8cee9dc0eebe5664d947659341d0ea661760b70a3cbabb204e7a1761edc",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Network indicator strings present in binary static analysis output",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Finding requires defence-in-depth review",
+        "summary": "Apply general defence-in-depth: minimise the exposed attack surface (firewall allow-lists, disable unused services), enforce authentication and least privilege, keep components patched, validate all input, log and alert on anomalous activity, and re-assess after each fix.",
+        "plain_english": "The assessment produced a finding that has no specific rule-based remediation template yet. Treat it as a weakness indicator and review the class of issue it belongs to. This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: info] Depends on the underlying weakness; unaddressed findings are a potential foothold in an attacker chain.",
+        "remediation_patch": "```bash\n# Host-level defence-in-depth example\n# 1. Restrict the service to the lab subnet\nufw allow from 192.168.10.0/24 to any port 80\n# 2. Disable unused services\nsystemctl disable --now exampled\n# 3. Confirm the fix\nufw status verbose && ss -tlnp\n```",
+        "cwe_id": "CWE-699",
+        "cvss_score": "7.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+        "threat_vector": "Remote Network / Unauthenticated",
+        "reproduction_command": "curl -v http://<target>/",
+        "verification_test": "curl -v --fail http://<target>/",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_b236eb4c4c7d",
+      "asset_id": "asset_31ad2c8e05db",
+      "target": "target_binaries\\vuln_worker.bin",
+      "type": "binary_shell_reference",
+      "severity": "medium",
+      "status": "confirmed",
+      "confidence": "medium",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Binary vuln_worker.bin [x86-64]: 1 string(s) matching 'shell_reference' pattern. Examples: ['/bin/sh']",
+      "evidence": [
+        {
+          "evidence_id": "evid_92ee4931537c",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_worker.bin",
+          "hash": "bfa84e0f038d6aaa4e84281816183d8d37ff18bb5392b6d1ebf384b2cfa367c6",
+          "timestamp": "2026-10-31T21:22:29+00:00",
+          "excerpt": "[\"/bin/sh\"]",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_91338a1a74af",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "56ef8b19622a4dcfd8e5f143bad245110c1e3beb8c6a6a9d263a217bf6716f6b",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Embedded system command shell reference confirmed in binary static strings",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Embedded Interactive Shell Reference in Binary",
+        "summary": "Avoid spawning shell interpreters via system() or /bin/sh. Use bounded POSIX execve/fork with fixed argument lists, sanitize all environment variables, and avoid calling interactive shells.",
+        "plain_english": "Static analysis revealed string literals referencing interactive system command shells ('/bin/sh', '/bin/bash', 'cmd.exe'). Binaries embedding direct shell references often spawn unconstrained shell processes, which can be hijacked if command arguments are user-controlled (CWE-78). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: medium] Arbitrary command execution, local privilege escalation, or backdoor remote shell access.",
+        "remediation_patch": "```c\n/* BEFORE: system(\"/bin/sh -c ...\"); */\n/* AFTER: directly invoke specific binary with fixed arguments, avoiding shell */\nchar *const argv[] = {\"/usr/bin/id\", \"-u\", NULL};\nexecv(\"/usr/bin/id\", argv);\n```",
+        "cwe_id": "CWE-78 (OS Command Injection) / CWE-250",
+        "cvss_score": "6.8",
+        "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        "threat_vector": "Privilege Escalation / Shell Spawn Vector",
+        "reproduction_command": "strings target_binary | grep -E '/bin/sh|/bin/bash|cmd.exe'",
+        "verification_test": "strings target_binary | grep -v -E '/bin/sh|/bin/bash|cmd.exe'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_2deae5225ba0",
+      "asset_id": "asset_31ad2c8e05db",
+      "target": "target_binaries\\vuln_worker.bin",
+      "type": "ctf_planted_flag",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Planted CTF flag captured in binary vuln_worker.bin strings: ['flag{cyberforge_crown_jewel_2026}']",
+      "evidence": [
+        {
+          "evidence_id": "evid_a5b3898456ae",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_worker.bin",
+          "hash": "bfa84e0f038d6aaa4e84281816183d8d37ff18bb5392b6d1ebf384b2cfa367c6",
+          "timestamp": "2026-10-31T21:22:29+00:00",
+          "excerpt": "[\"flag{cyberforge_crown_jewel_2026}\"]",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_5c6c756bc0ba",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "d2bf37c706ec02a9721ed0170ccb2365e6b79c70b53500f5f97a30bdf0c118f6",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Planted CTF flag literal confirmed in evidence",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Planted CTF flag captured",
+        "summary": "Record the capture in the run report (flag already confirmed as evidence). Then revoke whatever access leaked the flag early and rotate the flag value if uniqueness matters.",
+        "plain_english": "One of the competition's planted flags was recovered by the assessment: the host exposed the flag value where the scanner could read it (page body, HTML comment, HTTP header or binary strings). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Confirms the intended challenge path is solvable. If the flag is visible to unauthenticated crawlers it may also be leaked to untrusted users, revoking the challenge's difficulty.",
+        "remediation_patch": "```nginx\n# BEFORE: flag served to everyone in an HTML comment\n# <!-- flag{some-secret} -->\n\n# AFTER: flag endpoint gated behind the intended exploit marker\nlocation = /flag.txt {\n    deny all;                     # default deny\n    # 192.168.13.37 = lab scoring proxy / authenticated session\n    allow 192.168.13.37;\n    satisfy all;\n}\n```\nOperator actions: (1) log the capture in the run report, (2) revoke public read access to the leaking location, (3) rotate the flag value in the scoring system.",
+        "cwe_id": "CWE-200 (Exposure of Sensitive Information) / CWE-532",
+        "cvss_score": "7.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+        "threat_vector": "Direct Object Exfiltration / Privilege Token Harvest",
+        "reproduction_command": "curl -s http://{target}/path_with_flag",
+        "verification_test": "curl -s http://{target}/path_with_flag | grep -v 'flag{'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_6c3034fa47a7",
+      "asset_id": "asset_31ad2c8e05db",
+      "target": "target_binaries\\vuln_worker.bin",
+      "type": "binary_unsafe_function",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "medium",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Binary vuln_worker.bin [x86-64]: unsafe C function 'system' found. Command injection vulnerability if user input reaches argument (CWE-78). Matched strings: ['system']",
+      "evidence": [
+        {
+          "evidence_id": "evid_bcc11e08375f",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_worker.bin",
+          "hash": "bfa84e0f038d6aaa4e84281816183d8d37ff18bb5392b6d1ebf384b2cfa367c6",
+          "timestamp": "2026-10-31T21:22:29+00:00",
+          "excerpt": "{\"function\": \"system\", \"matches\": [\"system\"]}",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_7f788193ce9d",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "bbf231c9521adaa54e0b53ceed1fa500928fbdad52d1c8ef4748bdb4ac725241",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Unsafe function 'system' confirmed in static analysis output",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Dangerous libc function use in binary",
+        "summary": "Replace the unsafe calls: strcpy -> strlcpy/strncpy (or use snprintf), gets -> fgets with an explicit buffer limit, sprintf -> snprintf, strcat -> strlcat/snprintf, and popen/system -> exec-variants that take an argument array after allow-listing the command. Rebuild with warnings (-Wall -Wextra) and compiler hardening (-fstack-protector-strong, FORTIFY_SOURCE) enabled.",
+        "plain_english": "The analysed binary contains one or more dangerous libc functions. These functions perform no bounds checking, so an attacker who controls their input can overflow buffers, corrupt memory or execute commands. This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Buffer overflows leading to crashes (denial of service) or remote code execution with the privileges of the binary.",
+        "remediation_patch": "```c\n- `system`: /* system -> allow-list + exec with argument array: */\nif (!allowed_command(user_cmd)) return -1;\npid_t pid = fork();\nif (pid == 0) {\n    execv(\"/usr/bin/allowed\", argv);\n    _exit(127);\n}\n```",
+        "cwe_id": "CWE-120 (Classic Buffer Overflow) / CWE-676 (Dangerous Function)",
+        "cvss_score": "9.8",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        "threat_vector": "Local / Remote Binary Exploitation / Control Flow Hijacking",
+        "reproduction_command": "python3 -c \"print('A'*512)\" | ./binary",
+        "verification_test": "nm -D target_binary | grep -E '(gets|strcpy|sprintf|system)' || echo 'No unsafe symbols'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_c080362ef4dd",
+      "asset_id": "asset_31ad2c8e05db",
+      "target": "target_binaries\\vuln_worker.bin",
+      "type": "binary_unsafe_function",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "medium",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Binary vuln_worker.bin [x86-64]: unsafe C function 'execve' found. Execution of external binaries via execve prone to command injection or memory corruption (CWE-78). Matched strings: ['execve']",
+      "evidence": [
+        {
+          "evidence_id": "evid_1e1665af192b",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_worker.bin",
+          "hash": "bfa84e0f038d6aaa4e84281816183d8d37ff18bb5392b6d1ebf384b2cfa367c6",
+          "timestamp": "2026-10-31T21:22:29+00:00",
+          "excerpt": "{\"function\": \"execve\", \"matches\": [\"execve\"]}",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_54dbe8edfe0e",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "c024dccd18f6e3a5f804d2165b999698031881c0e50276189a2056534c9b5e7e",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Unsafe function 'execve' confirmed in static analysis output",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Dangerous libc function use in binary",
+        "summary": "Replace the unsafe calls: strcpy -> strlcpy/strncpy (or use snprintf), gets -> fgets with an explicit buffer limit, sprintf -> snprintf, strcat -> strlcat/snprintf, and popen/system -> exec-variants that take an argument array after allow-listing the command. Rebuild with warnings (-Wall -Wextra) and compiler hardening (-fstack-protector-strong, FORTIFY_SOURCE) enabled.",
+        "plain_english": "The analysed binary contains one or more dangerous libc functions. These functions perform no bounds checking, so an attacker who controls their input can overflow buffers, corrupt memory or execute commands. This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Buffer overflows leading to crashes (denial of service) or remote code execution with the privileges of the binary.",
+        "remediation_patch": "```c\n- `execve`: /* execve -> validate path against strict allow-list and sanitize envp: */\nif (!is_allowed_executable(binary_path)) return -1;\nchar *const safe_envp[] = {\"PATH=/usr/bin:/bin\", NULL};\nexecve(binary_path, argv, safe_envp);\n_exit(127);\n```",
+        "cwe_id": "CWE-120 (Classic Buffer Overflow) / CWE-676 (Dangerous Function)",
+        "cvss_score": "9.8",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        "threat_vector": "Local / Remote Binary Exploitation / Control Flow Hijacking",
+        "reproduction_command": "python3 -c \"print('A'*512)\" | ./binary",
+        "verification_test": "nm -D target_binary | grep -E '(gets|strcpy|sprintf|system)' || echo 'No unsafe symbols'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_be6bfbce1a5e",
+      "asset_id": "asset_31ad2c8e05db",
+      "target": "target_binaries\\vuln_worker.bin",
+      "type": "binary_unsafe_function",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "medium",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Binary vuln_worker.bin [x86-64]: unsafe C function 'popen' found. Process execution prone to command injection (CWE-78). Matched strings: ['popen']",
+      "evidence": [
+        {
+          "evidence_id": "evid_3a284b55af75",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_worker.bin",
+          "hash": "bfa84e0f038d6aaa4e84281816183d8d37ff18bb5392b6d1ebf384b2cfa367c6",
+          "timestamp": "2026-10-31T21:22:29+00:00",
+          "excerpt": "{\"function\": \"popen\", \"matches\": [\"popen\"]}",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_561fffd572df",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "e4defc40a517fabedb7cd13cf08f5ce0062644de1ed419f95454a2d7bc094056",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Unsafe function 'popen' confirmed in static analysis output",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Dangerous libc function use in binary",
+        "summary": "Replace the unsafe calls: strcpy -> strlcpy/strncpy (or use snprintf), gets -> fgets with an explicit buffer limit, sprintf -> snprintf, strcat -> strlcat/snprintf, and popen/system -> exec-variants that take an argument array after allow-listing the command. Rebuild with warnings (-Wall -Wextra) and compiler hardening (-fstack-protector-strong, FORTIFY_SOURCE) enabled.",
+        "plain_english": "The analysed binary contains one or more dangerous libc functions. These functions perform no bounds checking, so an attacker who controls their input can overflow buffers, corrupt memory or execute commands. This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Buffer overflows leading to crashes (denial of service) or remote code execution with the privileges of the binary.",
+        "remediation_patch": "```c\n- `popen`: /* popen -> static command + execv (no shell metacharacters): */\nint pipefd[2];\npipe(pipefd);\npid_t pid = fork();\nif (pid == 0) {\n    dup2(pipefd[1], STDOUT_FILENO);\n    execv(\"/usr/bin/needed\", argv);  /* argv is fixed, not user text */\n    _exit(127);\n}\n```",
+        "cwe_id": "CWE-120 (Classic Buffer Overflow) / CWE-676 (Dangerous Function)",
+        "cvss_score": "9.8",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        "threat_vector": "Local / Remote Binary Exploitation / Control Flow Hijacking",
+        "reproduction_command": "python3 -c \"print('A'*512)\" | ./binary",
+        "verification_test": "nm -D target_binary | grep -E '(gets|strcpy|sprintf|system)' || echo 'No unsafe symbols'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_b2f6d922b17c",
+      "asset_id": "asset_31ad2c8e05db",
+      "target": "target_binaries\\vuln_worker.bin",
+      "type": "binary_unsafe_function",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "medium",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Binary vuln_worker.bin [x86-64]: unsafe C function 'strcpy' found. Unbounded string copy prone to stack buffer overflow (CWE-120). Matched strings: ['strcpy']",
+      "evidence": [
+        {
+          "evidence_id": "evid_a84ba2de4cf6",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_worker.bin",
+          "hash": "bfa84e0f038d6aaa4e84281816183d8d37ff18bb5392b6d1ebf384b2cfa367c6",
+          "timestamp": "2026-10-31T21:22:29+00:00",
+          "excerpt": "{\"function\": \"strcpy\", \"matches\": [\"strcpy\"]}",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_f8f41bc4b6e9",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "08e6d506d2dce192651d4a95697d027e940f17e44a4a55cb1938d58c14ab389a",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Unsafe function 'strcpy' confirmed in static analysis output",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Dangerous libc function use in binary",
+        "summary": "Replace the unsafe calls: strcpy -> strlcpy/strncpy (or use snprintf), gets -> fgets with an explicit buffer limit, sprintf -> snprintf, strcat -> strlcat/snprintf, and popen/system -> exec-variants that take an argument array after allow-listing the command. Rebuild with warnings (-Wall -Wextra) and compiler hardening (-fstack-protector-strong, FORTIFY_SOURCE) enabled.",
+        "plain_english": "The analysed binary contains one or more dangerous libc functions. These functions perform no bounds checking, so an attacker who controls their input can overflow buffers, corrupt memory or execute commands. This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Buffer overflows leading to crashes (denial of service) or remote code execution with the privileges of the binary.",
+        "remediation_patch": "```c\n- `strcpy`: /* strcpy -> bounded copy: */\nchar dest[BUF_SIZE];\nstrncpy(dest, input, sizeof(dest) - 1);\ndest[sizeof(dest) - 1] = '\\0';  /* or use strlcpy */\n```",
+        "cwe_id": "CWE-120 (Classic Buffer Overflow) / CWE-676 (Dangerous Function)",
+        "cvss_score": "9.8",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        "threat_vector": "Local / Remote Binary Exploitation / Control Flow Hijacking",
+        "reproduction_command": "python3 -c \"print('A'*512)\" | ./binary",
+        "verification_test": "nm -D target_binary | grep -E '(gets|strcpy|sprintf|system)' || echo 'No unsafe symbols'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_28b3190761d9",
+      "asset_id": "asset_31ad2c8e05db",
+      "target": "target_binaries\\vuln_worker.bin",
+      "type": "binary_unsafe_function",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "medium",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Binary vuln_worker.bin [x86-64]: unsafe C function 'gets' found. Inherently dangerous input function with no length limit (CWE-242). Matched strings: ['gets']",
+      "evidence": [
+        {
+          "evidence_id": "evid_71f47fad7faa",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_worker.bin",
+          "hash": "bfa84e0f038d6aaa4e84281816183d8d37ff18bb5392b6d1ebf384b2cfa367c6",
+          "timestamp": "2026-10-31T21:22:29+00:00",
+          "excerpt": "{\"function\": \"gets\", \"matches\": [\"gets\"]}",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_2d5b63c585e9",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "44ecdc4f3e986bf7600c78a1051445c71b3067a86b870bb9af692ec3d304dfc1",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Unsafe function 'gets' confirmed in static analysis output",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Dangerous libc function use in binary",
+        "summary": "Replace the unsafe calls: strcpy -> strlcpy/strncpy (or use snprintf), gets -> fgets with an explicit buffer limit, sprintf -> snprintf, strcat -> strlcat/snprintf, and popen/system -> exec-variants that take an argument array after allow-listing the command. Rebuild with warnings (-Wall -Wextra) and compiler hardening (-fstack-protector-strong, FORTIFY_SOURCE) enabled.",
+        "plain_english": "The analysed binary contains one or more dangerous libc functions. These functions perform no bounds checking, so an attacker who controls their input can overflow buffers, corrupt memory or execute commands. This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Buffer overflows leading to crashes (denial of service) or remote code execution with the privileges of the binary.",
+        "remediation_patch": "```c\n- `gets`: /* gets -> fgets with explicit limit (gets is unfixable): */\nchar buf[BUF_SIZE];\nif (fgets(buf, sizeof(buf), stdin) == NULL) { return -1; }\n```",
+        "cwe_id": "CWE-120 (Classic Buffer Overflow) / CWE-676 (Dangerous Function)",
+        "cvss_score": "9.8",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        "threat_vector": "Local / Remote Binary Exploitation / Control Flow Hijacking",
+        "reproduction_command": "python3 -c \"print('A'*512)\" | ./binary",
+        "verification_test": "nm -D target_binary | grep -E '(gets|strcpy|sprintf|system)' || echo 'No unsafe symbols'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_1e4564188215",
+      "asset_id": "asset_31ad2c8e05db",
+      "target": "target_binaries\\vuln_worker.bin",
+      "type": "binary_unsafe_function",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "medium",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Binary vuln_worker.bin [x86-64]: unsafe C function 'sprintf' found. Format string / buffer overflow vulnerability (CWE-134). Matched strings: ['sprintf']",
+      "evidence": [
+        {
+          "evidence_id": "evid_c1b331859889",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_worker.bin",
+          "hash": "bfa84e0f038d6aaa4e84281816183d8d37ff18bb5392b6d1ebf384b2cfa367c6",
+          "timestamp": "2026-10-31T21:22:29+00:00",
+          "excerpt": "{\"function\": \"sprintf\", \"matches\": [\"sprintf\"]}",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_6d5b4479f2dc",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "db19d51ca62ffebd369d869da8fbe78db1b8f7f85d442b987a0fc74476459f74",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Unsafe function 'sprintf' confirmed in static analysis output",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Dangerous libc function use in binary",
+        "summary": "Replace the unsafe calls: strcpy -> strlcpy/strncpy (or use snprintf), gets -> fgets with an explicit buffer limit, sprintf -> snprintf, strcat -> strlcat/snprintf, and popen/system -> exec-variants that take an argument array after allow-listing the command. Rebuild with warnings (-Wall -Wextra) and compiler hardening (-fstack-protector-strong, FORTIFY_SOURCE) enabled.",
+        "plain_english": "The analysed binary contains one or more dangerous libc functions. These functions perform no bounds checking, so an attacker who controls their input can overflow buffers, corrupt memory or execute commands. This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Buffer overflows leading to crashes (denial of service) or remote code execution with the privileges of the binary.",
+        "remediation_patch": "```c\n- `sprintf`: /* sprintf -> snprintf (bounds + format control): */\nsnprintf(buf, sizeof(buf), \"Hello %s\", name);\n```",
+        "cwe_id": "CWE-120 (Classic Buffer Overflow) / CWE-676 (Dangerous Function)",
+        "cvss_score": "9.8",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        "threat_vector": "Local / Remote Binary Exploitation / Control Flow Hijacking",
+        "reproduction_command": "python3 -c \"print('A'*512)\" | ./binary",
+        "verification_test": "nm -D target_binary | grep -E '(gets|strcpy|sprintf|system)' || echo 'No unsafe symbols'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_3ed0a571b9c6",
+      "asset_id": "asset_382ab00713e9",
+      "target": "192.168.60.139",
+      "type": "cleartext_http_authentication",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "vulnerability-analysis",
+      "summary": "Cleartext HTTP Basic Authentication exposed at http://192.168.60.139:1111/ without TLS encryption (CWE-319): Basic realm=\"Mitigata Log Monitor\"",
+      "evidence": [
+        {
+          "evidence_id": "evid_5b110bc841d1",
+          "source_tool": "web_crawler",
+          "artifact_path": "http://192.168.60.139:1111/",
+          "hash": "86dfd247d650b8e725f82ba9ef2bfbbb10a6ec206f7650623b0d895c214f7776",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "status=401; WWW-Authenticate=Basic realm=\"Mitigata Log Monitor\"",
+          "verification_method": "deterministic_header_audit"
+        },
+        {
+          "evidence_id": "evid_57c485a43ec9",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "8edfbe1af770507e6b65afb146e63a5e655951c542a3656186d52fa4d6598a0f",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "HTTP Basic Authentication without TLS confirmed in live server response",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Cleartext HTTP Basic Authentication",
+        "summary": "1. Enforce TLS (HTTPS) on the port. 2. Reject Basic Auth over unencrypted HTTP. 3. Use strong session-based authentication or OAuth2.",
+        "plain_english": "The web service challenges for HTTP Basic Authentication over an unencrypted HTTP channel. Anyone on the local network path or Wi-Fi can capture and decode the credentials in seconds (CWE-319). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Direct credential theft leading to full unauthorised administrative access to the service.",
+        "remediation_patch": "```nginx\n# Enforce TLS redirection\nserver {\n    listen 80;\n    return 301 https://$host$request_uri;\n}\n```",
+        "cwe_id": "CWE-523 (Unprotected Transport of Credentials) / CWE-319",
+        "cvss_score": "8.8",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+        "threat_vector": "Network Interception / Credential Sniffing",
+        "reproduction_command": "curl -i -u admin:test http://{target}:{port}/",
+        "verification_test": "curl -i http://{target}:{port}/ -o /dev/null -w '%{http_code}' | grep 301",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_23e023b385fd",
+      "asset_id": "asset_382ab00713e9",
+      "target": "192.168.60.139",
+      "type": "missing_security_headers",
+      "severity": "medium",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "vulnerability-analysis",
+      "summary": "Critical HTTP security headers missing at http://192.168.60.139:1111/: Content-Security-Policy, X-Frame-Options, X-Content-Type-Options: nosniff (CWE-1021, CWE-693, CWE-16)",
+      "evidence": [
+        {
+          "evidence_id": "evid_8a0542614678",
+          "source_tool": "web_crawler",
+          "artifact_path": "http://192.168.60.139:1111/",
+          "hash": "839f1c64b99bb2d4f81b7aa18ba96035acf248e05c02350e6c72f17362b1a101",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "{\"missing\": [\"Content-Security-Policy\", \"X-Frame-Options\", \"X-Content-Type-Options: nosniff\"], \"url\": \"http://192.168.60.139:1111/\"}",
+          "verification_method": "deterministic_header_audit"
+        },
+        {
+          "evidence_id": "evid_9ba0d30bca36",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "050383e65a71ea90f255ec626cc7a71219c673d4f3f4fc5ec86e7a6a64e757e0",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Absence of critical HTTP defensive headers confirmed against web server",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Missing HTTP Security Defense Headers",
+        "summary": "Configure the web server to emit Content-Security-Policy, X-Frame-Options: DENY, and X-Content-Type-Options: nosniff.",
+        "plain_english": "The web server does not send critical HTTP defensive headers (Content-Security-Policy, X-Frame-Options, X-Content-Type-Options). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: medium] Leaves users exposed to Clickjacking (UI redressing), MIME confusion attacks, and Cross-Site Scripting (XSS).",
+        "remediation_patch": "```nginx\nadd_header X-Frame-Options \"DENY\" always;\nadd_header X-Content-Type-Options \"nosniff\" always;\nadd_header Content-Security-Policy \"default-src 'self'\" always;\n```",
+        "cwe_id": "CWE-693 (Protection Mechanism Failure)",
+        "cvss_score": "6.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:L/A:N",
+        "threat_vector": "Clickjacking / MIME Sniffing / Cross-Site Scripting",
+        "reproduction_command": "curl -sI http://{target}/",
+        "verification_test": "curl -sI https://{target}/ | grep -E '(Content-Security-Policy|X-Frame-Options|X-Content-Type-Options)'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_8bea9f303be7",
+      "asset_id": "asset_382ab00713e9",
+      "target": "192.168.60.139",
+      "type": "server_banner_disclosure",
+      "severity": "low",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Software version disclosure in HTTP headers at http://192.168.60.139:1111/: Server: ctf-logmon Python/3.14.4 (CWE-200)",
+      "evidence": [
+        {
+          "evidence_id": "evid_d05e1c9f698e",
+          "source_tool": "web_crawler",
+          "artifact_path": "http://192.168.60.139:1111/",
+          "hash": "607731dfd35be34525a4e33348d306b5833276ba92550b08d29a8c201afbbfce",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "url=http://192.168.60.139:1111/; Server: ctf-logmon Python/3.14.4",
+          "verification_method": "deterministic_header_audit"
+        },
+        {
+          "evidence_id": "evid_4aa264a1693e",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "653d0e8996aff6574e8063958f034e7efdb607ad71eb4e647f913b860b709a62",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Granular software version banner confirmed in server HTTP headers",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Detailed Software Version Disclosure",
+        "summary": "Suppress server version banners in web server configuration.",
+        "plain_english": "HTTP response headers expose specific product and version numbers (e.g., Server, X-Powered-By), assisting attackers in targeting known CVEs (CWE-200). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: low] Reconnaissance advantage for attackers seeking version-specific exploits.",
+        "remediation_patch": "```nginx\nserver_tokens off;\n```",
+        "cwe_id": "CWE-200 (Exposure of Software Version Information)",
+        "cvss_score": "5.3",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+        "threat_vector": "Automated Exploit Targeting / CVE Mapping",
+        "reproduction_command": "curl -sI http://{target}/ | grep -i Server",
+        "verification_test": "curl -sI https://{target}/ | grep -v -i 'Server: [a-zA-Z]'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_0f4d7c696f0c",
+      "asset_id": "asset_90654d730aed",
+      "target": "S:\\CyberForge_CART\\target_binaries\\keykeeper",
+      "type": "weak_reversible_binary_passkey",
+      "severity": "medium",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "vulnerability-analysis",
+      "summary": "Reversible static XOR validation in keykeeper binary yields passkey 'R3v3rs3_Th3_Z0n3' (CWE-259, CWE-327)",
+      "evidence": [
+        {
+          "evidence_id": "evid_dddd18f141dd",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "S:\\CyberForge_CART\\target_binaries\\keykeeper",
+          "hash": "1d64eac1b49967702bf1858c86c26302115ad5d8859168939d3fe08d0f710ea4",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Disassembly offset 0x10a0: XOR table 'mitigata' and static array resolves to passkey 'R3v3rs3_Th3_Z0n3'",
+          "verification_method": "live_network_probe"
+        },
+        {
+          "evidence_id": "evid_18c34bac848b",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "d28972cd9db657c33eea661b00fc696cf3c0c8657a7ba34a2f8ff38bdeb55d34",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Reversible binary passkey algorithm confirmed in disassembly",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Reversible / Obfuscated Authentication Passkey in Binary",
+        "summary": "Do not rely on client-side secret verification. Use server-side asymmetric challenge-response authentication, hardware tokens, or salted cryptographic hashes.",
+        "plain_english": "The client binary employs a trivial static XOR rotation routine to validate a passkey ('R3v3rs3_Th3_Z0n3'). Because all tables and constants reside in the binary's read-only data (.rodata), any attacker with a disassembler can reverse the authorization key in seconds (CWE-259, CWE-327). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: medium] Trivial circumvention of access controls on associated services (such as the Game Zone console).",
+        "remediation_patch": "```c\n/* BEFORE: Reversible static XOR tables in client binary */\n/* AFTER: Authenticate against server using salted cryptographic HMAC or mTLS */\nint verify_auth_server(const char *token) {\n    // Submit auth token over TLS to central auth service\n    return https_post_auth(\"/api/v1/auth\", token);\n}\n```",
+        "cwe_id": "CWE-259 (Hard-coded Password) / CWE-327 (Broken Crypto Algorithm)",
+        "cvss_score": "7.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+        "threat_vector": "Offline Cryptanalysis / Binary Disassembly of Validation Table",
+        "reproduction_command": "objdump -d -j .text keykeeper | grep -A 20 '<main>'",
+        "verification_test": "test client communicates with server over TLS with mutual auth",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_b2bf53a9f6c5",
+      "asset_id": "asset_f56eba07234d",
+      "target": "192.168.60.139",
+      "type": "unencrypted_cleartext_service",
+      "severity": "medium",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "vulnerability-analysis",
+      "summary": "Unencrypted cleartext service exposed on port 1111/tcp (lmsocialserver) without TLS encryption (CWE-319)",
+      "evidence": [
+        {
+          "evidence_id": "evid_c12fc4355881",
+          "source_tool": "nmap",
+          "artifact_path": "192.168.60.139:1111",
+          "hash": "cf9944357aae19e779afece344861884b982fa3f349a7f2a3d9103d198a9fa18",
+          "timestamp": "2026-10-31T21:22:38+00:00",
+          "excerpt": "port=1111; protocol=tcp; service=lmsocialserver; banner=",
+          "verification_method": "nmap_service_probe"
+        },
+        {
+          "evidence_id": "evid_b59c00b2428d",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "ee70d02dbc2f269eb8d687ec2fcd9eeb957adccf3967667d26e7d3f33fb1f503",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Unencrypted TCP listening service confirmed by network scan",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Unencrypted Cleartext Network Service",
+        "summary": "Terminate TLS using a reverse proxy (e.g. Nginx, HAProxy) or enable TLS natively.",
+        "plain_english": "A network service is communicating without Transport Layer Security (TLS/SSL). Traffic sent to or from this service is in cleartext and readable by network observers (CWE-319). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: medium] Eavesdropping and credential theft on transit networks.",
+        "remediation_patch": "```nginx\n# Terminate TLS with modern ciphers\nserver {\n    listen 443 ssl;\n    ssl_certificate /etc/ssl/certs/cert.pem;\n    ssl_certificate_key /etc/ssl/private/key.pem;\n}\n```",
+        "cwe_id": "CWE-319 (Cleartext Transmission of Sensitive Information)",
+        "cvss_score": "7.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+        "threat_vector": "Adjacent Network / Remote Eavesdropping (Man-in-the-Middle)",
+        "reproduction_command": "curl -v http://{target}:{port}/",
+        "verification_test": "curl -v --fail --tlsv1.3 https://{target}:{port}/",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_5d1958623944",
+      "asset_id": "asset_f56eba07234d",
+      "target": "192.168.60.139",
+      "type": "non_standard_service_port",
+      "severity": "low",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Non-standard network service port 1111/tcp (lmsocialserver) exposed directly on target (CWE-657)",
+      "evidence": [
+        {
+          "evidence_id": "evid_db0428aad7c8",
+          "source_tool": "nmap",
+          "artifact_path": "192.168.60.139:1111",
+          "hash": "7b81d5ce2abb61aedde8851adcbbc33b9aebad456934e9522beba14f30ea3e09",
+          "timestamp": "2026-10-31T21:22:38+00:00",
+          "excerpt": "port=1111; protocol=tcp; service_name=lmsocialserver",
+          "verification_method": "nmap_port_scan"
+        },
+        {
+          "evidence_id": "evid_01ef888b5ee8",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "f11f70fde2d134d84cf550e1d399151d06d896d2fcbbbcdc3ade7544f6e7f101",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Non-standard listening port exposure confirmed by network scanner",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Direct Exposure of Non-Standard Network Port",
+        "summary": "Bind the service to localhost 127.0.0.1 or restrict access via host firewall.",
+        "plain_english": "A listening service is running on an unexpected, non-standard TCP port (CWE-657). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: low] Expands network attack surface and bypasses standard reverse proxy protections.",
+        "remediation_patch": "```bash\n# Restrict access with UFW firewall\nsudo ufw default deny incoming\nsudo ufw allow from 192.168.60.0/24 to any port 80 proto tcp\n```",
+        "cwe_id": "CWE-200 (Exposure of Sensitive Information)",
+        "cvss_score": "5.3",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+        "threat_vector": "Remote Network / Service Fingerprinting",
+        "reproduction_command": "nc -zv {target} {port}",
+        "verification_test": "nmap -sT -p {port} {target} -oG - | grep -i closed",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_a8ef427a2289",
+      "asset_id": "asset_f56eba07234d",
+      "target": "192.168.60.139",
+      "type": "reverse_proxy_ip_spoofing",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "vulnerability-analysis",
+      "summary": "Reverse proxy access control bypass via X-Forwarded-For: 192.168.60.1 exposes internal Mitigata Hidden Wiki (CWE-290)",
+      "evidence": [
+        {
+          "evidence_id": "evid_5ea8f99a2f62",
+          "source_tool": "web_crawler",
+          "artifact_path": "http://192.168.60.139/",
+          "hash": "e4254d766ea7753baa3249380bd419380bb32c67e214eba844e03c63f0d71868",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "status=200; X-Forwarded-For: 192.168.60.1; <title>Home :: Mitigata Hidden Wiki</title>; Internal knowledge base unlocked",
+          "verification_method": "live_network_probe"
+        },
+        {
+          "evidence_id": "evid_5a90803c2861",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "a01f53882556d6de75196cfe5a930378117ba154c259e24cd5cb34173c41d871",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Reverse proxy IP spoofing bypass confirmed by successful response",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Reverse Proxy Access Control Bypass via IP Header Spoofing",
+        "summary": "Never trust client-originating IP headers from untrusted connections. Configure the reverse proxy to strip incoming 'X-Forwarded-For' headers and only set them using the actual connection socket address ($remote_addr).",
+        "plain_english": "The front-end proxy trusts client-supplied headers such as 'X-Forwarded-For' to enforce internal IP restrictions. By injecting 'X-Forwarded-For: 192.168.60.1', an untrusted remote attacker completely bypasses the boundary gate and gains unauthorized access to internal resources (e.g., Hidden Wiki) (CWE-290). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Full authentication bypass of corporate segment assets and unrestricted access to internal documentation, sensitive infrastructure blueprints, and consoles.",
+        "remediation_patch": "```nginx\n# Secure reverse proxy configuration:\n# Overwrite X-Forwarded-For with the true peer socket IP\nproxy_set_header X-Forwarded-For $remote_addr;\nproxy_set_header X-Real-IP $remote_addr;\n\n# Only trust upstream proxy headers if received from known trusted proxies:\n# set_real_ip_from 10.0.0.1;\n# real_ip_header X-Forwarded-For;\n```",
+        "cwe_id": "CWE-290 (Authentication Bypass by Spoofing) / CWE-345",
+        "cvss_score": "9.1",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N",
+        "threat_vector": "Remote Unauthenticated Reverse Proxy Header Injection",
+        "reproduction_command": "curl -H 'X-Forwarded-For: 192.168.60.1' http://{target}/",
+        "verification_test": "curl -i -H 'X-Forwarded-For: 192.168.60.1' http://{target}/ | grep '403 Forbidden'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_4617c7e0a4c5",
+      "asset_id": "asset_f56eba07234d",
+      "target": "192.168.60.139",
+      "type": "unauthenticated_artifact_vault_exposure",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "vulnerability-analysis",
+      "summary": "Unauthenticated directory listing exposed at /vault/ containing compiled binary 'keykeeper' (CWE-552)",
+      "evidence": [
+        {
+          "evidence_id": "evid_856d833b2e61",
+          "source_tool": "web_crawler",
+          "artifact_path": "http://192.168.60.139/vault/",
+          "hash": "8d48b4019b43646a51bca2e2b73865fc7e2371423533f99e9978380ef66229d8",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Index of /vault/ - Build artifact vault. Internal use. /vault/keykeeper (14376 bytes)",
+          "verification_method": "live_network_probe"
+        },
+        {
+          "evidence_id": "evid_4dff0a9bde8b",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "0f96e7da9aaa5d3ebb1ad0058300cd018b57429f240a9b16d7fbd02b59ceb862",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Unauthenticated build artifact vault exposure confirmed",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Unauthenticated Directory Indexing on Build Artifact Vault",
+        "summary": "Disable directory listing across all web directories and gate the artifact vault behind role-based authentication and private repository controls.",
+        "plain_english": "The web server exposes an internal directory listing at /vault/ containing compiled binary artifacts (e.g., keykeeper). Attackers can directly download proprietary software, analyze binaries for vulnerabilities, and extract credentials (CWE-552). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Intellectual property leakage, reverse-engineering of authentication schemes, and offline exploitation of internal services.",
+        "remediation_patch": "```nginx\nlocation /vault/ {\n    autoindex off;                   # Disable directory listing\n    auth_basic \"Restricted Vault\";   # Enforce authentication\n    auth_basic_user_file /etc/nginx/.htpasswd;\n}\n```",
+        "cwe_id": "CWE-552 (Files or Directories Accessible to External Parties) / CWE-548",
+        "cvss_score": "8.6",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+        "threat_vector": "Unauthenticated Directory Traversal & Proprietary Build Extraction",
+        "reproduction_command": "curl -s http://{target}/vault/",
+        "verification_test": "curl -sI http://{target}/vault/ | grep -E '(401 Unauthorized|403 Forbidden)'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_e7fdfdd9526e",
+      "asset_id": "asset_f56eba07234d",
+      "target": "192.168.60.139",
+      "type": "unauthenticated_console_service",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "vulnerability-analysis",
+      "summary": "Direct exposure of cleartext administrative console on TCP port 8833 (CWE-284)",
+      "evidence": [
+        {
+          "evidence_id": "evid_c97f6ee6def2",
+          "source_tool": "nmap",
+          "artifact_path": "192.168.60.139:8833",
+          "hash": "f6c6d7f1be5fc4d86e299214c564b06d1941b8190fce49b5e5532c1e0868b348",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "port=8833/tcp; banner='WELCOME TO THE GAME ZONE... AUTH <passkey> to begin; PIDREQ format'",
+          "verification_method": "live_network_probe"
+        },
+        {
+          "evidence_id": "evid_cd6815ca72ba",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "49eb650ecfd4b91f04e17e8e3f8e162662a5dfa2d49da2fb74401c630731a85a",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Cleartext administrative console service banner confirmed on port 8833",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Direct Exposure of Cleartext Administrative Console",
+        "summary": "Bind the service to 127.0.0.1 or an isolated management network, enforce mutual TLS (mTLS), and restrict firewall access strictly to authorized administrator hosts.",
+        "plain_english": "An unencrypted interactive text console is exposed on TCP port 8833. The service communicates in cleartext without TLS and permits execution of custom commands (CWE-284). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Exposure of system commands, process manipulation, and arbitrary data retrieval.",
+        "remediation_patch": "```bash\n# Firewall rule: allow port 8833 only from admin VPN bastion\nsudo ufw allow from 10.8.0.5 to any port 8833 proto tcp\nsudo ufw deny 8833\n```",
+        "cwe_id": "CWE-284 (Improper Access Control) / CWE-306",
+        "cvss_score": "8.8",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        "threat_vector": "Direct TCP Interactive Console Access without Transport Security",
+        "reproduction_command": "nc {target} 8833",
+        "verification_test": "nc -z -w 2 {target} 8833 || echo 'Port 8833 filtered/closed'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_11bce5f61e54",
+      "asset_id": "asset_f56eba07234d",
+      "target": "192.168.60.139",
+      "type": "flag_disclosure_pidreq",
+      "severity": "critical",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "exploitation",
+      "summary": "Arbitrary file reading via console command PIDREQ dereferenced /Desktop/flag (CWE-639, CWE-200)",
+      "evidence": [
+        {
+          "evidence_id": "evid_e01af16e7ffe",
+          "source_tool": "gamezone_probe",
+          "artifact_path": "192.168.60.139:8833",
+          "hash": "4c8c6b5cb2a493e898fad8e995f163c81436eb296e7eb7f65d9070b46ec81f81",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Command: PIDREQ 58554 /Desktop/flag e068 -> FLAG: MITIGATA{r3v_b1n_cr4ft_p1d_t0_0wn_th3_z0n3}",
+          "verification_method": "live_network_probe"
+        },
+        {
+          "evidence_id": "evid_7c8edfe1d9cc",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "dc6ff387bf69d56345846d11b5965fb10b024b40566bca8f94c36c5c32417538",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Arbitrary file reading and flag disclosure confirmed via PIDREQ",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Arbitrary Resource Disclosure via Console Command Injection",
+        "summary": "Enforce strict path canonicalization against an allowed base directory; reject any path containing path traversal sequences or references outside the sandbox. Execute worker processes with least privileges.",
+        "plain_english": "The console protocol command PIDREQ permits requesting arbitrary file paths (e.g., /Desktop/flag) using a simple checksum. The server dereferences the path without validation and outputs confidential contents (CWE-639, CWE-200). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: critical] Critical information disclosure, arbitrary file exfiltration, and compromise of CTF flags/secrets.",
+        "remediation_patch": "```python\nimport os\n\nALLOWED_DIR = '/var/app/sandbox'\n\ndef safe_read_resource(rel_path: str) -> bytes:\n    full_path = os.path.realpath(os.path.join(ALLOWED_DIR, rel_path.lstrip('/')))\n    if not full_path.startswith(os.path.realpath(ALLOWED_DIR)):\n        raise PermissionError('Access denied: path traversal attempt')\n    with open(full_path, 'rb') as f:\n        return f.read()\n```",
+        "cwe_id": "CWE-639 (Insecure Direct Object Reference) / CWE-200",
+        "cvss_score": "9.8",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        "threat_vector": "Arbitrary File Dereference / Memory-mapped Path Disclosure",
+        "reproduction_command": "printf 'PIDREQ 58554 /Desktop/flag e068\n' | nc {target} 8833",
+        "verification_test": "printf 'PIDREQ 58554 /etc/passwd 0000\n' | nc {target} 8833 | grep 'INVALID_PATH'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_c0fadeb94b4d",
+      "asset_id": "asset_f56eba07234d",
+      "target": "192.168.60.139",
+      "type": "ctf_planted_flag",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "exploitation",
+      "summary": "Captured CTF Flag #2 via Game Zone Console: MITIGATA{r3v_b1n_cr4ft_p1d_t0_0wn_th3_z0n3}",
+      "evidence": [
+        {
+          "evidence_id": "evid_e5d1ba78358c",
+          "source_tool": "gamezone_probe",
+          "artifact_path": "192.168.60.139:8833",
+          "hash": "07f8e812ad34789acdf20aa4df33437af33d0675988b8883322a72ee1f611815",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "[\"MITIGATA{r3v_b1n_cr4ft_p1d_t0_0wn_th3_z0n3}\"]",
+          "verification_method": "live_network_probe"
+        },
+        {
+          "evidence_id": "evid_d38a63e70e67",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "d2bf37c706ec02a9721ed0170ccb2365e6b79c70b53500f5f97a30bdf0c118f6",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Planted CTF flag literal confirmed in evidence",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Planted CTF flag captured",
+        "summary": "Record the capture in the run report (flag already confirmed as evidence). Then revoke whatever access leaked the flag early and rotate the flag value if uniqueness matters.",
+        "plain_english": "One of the competition's planted flags was recovered by the assessment: the host exposed the flag value where the scanner could read it (page body, HTML comment, HTTP header or binary strings). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Confirms the intended challenge path is solvable. If the flag is visible to unauthenticated crawlers it may also be leaked to untrusted users, revoking the challenge's difficulty.",
+        "remediation_patch": "```nginx\n# BEFORE: flag served to everyone in an HTML comment\n# <!-- flag{some-secret} -->\n\n# AFTER: flag endpoint gated behind the intended exploit marker\nlocation = /flag.txt {\n    deny all;                     # default deny\n    # 192.168.13.37 = lab scoring proxy / authenticated session\n    allow 192.168.13.37;\n    satisfy all;\n}\n```\nOperator actions: (1) log the capture in the run report, (2) revoke public read access to the leaking location, (3) rotate the flag value in the scoring system.",
+        "cwe_id": "CWE-200 (Exposure of Sensitive Information) / CWE-532",
+        "cvss_score": "7.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+        "threat_vector": "Direct Object Exfiltration / Privilege Token Harvest",
+        "reproduction_command": "curl -s http://{target}/path_with_flag",
+        "verification_test": "curl -s http://{target}/path_with_flag | grep -v 'flag{'",
+        "references": []
+      }
+    }
+  ],
+  "captured_flags": [
+    {
+      "finding_id": "find_557f71f7b2c5",
+      "asset_id": "asset_283f6afdc3f3",
+      "target": "target_binaries\\vuln_auth_daemon.elf",
+      "type": "ctf_planted_flag",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Planted CTF flag captured in binary vuln_auth_daemon.elf strings: ['flag{CyberForge_Live_Binary_Analysis_2026}']",
+      "evidence": [
+        {
+          "evidence_id": "evid_e8444b328299",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_auth_daemon.elf",
+          "hash": "874ab0d9c1f3afba3742bfa15013e882874f9ebff35b5effe682856101c1902d",
+          "timestamp": "2026-10-31T21:22:29+00:00",
+          "excerpt": "[\"flag{CyberForge_Live_Binary_Analysis_2026}\"]",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_e40e511cb1cb",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "d2bf37c706ec02a9721ed0170ccb2365e6b79c70b53500f5f97a30bdf0c118f6",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Planted CTF flag literal confirmed in evidence",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Planted CTF flag captured",
+        "summary": "Record the capture in the run report (flag already confirmed as evidence). Then revoke whatever access leaked the flag early and rotate the flag value if uniqueness matters.",
+        "plain_english": "One of the competition's planted flags was recovered by the assessment: the host exposed the flag value where the scanner could read it (page body, HTML comment, HTTP header or binary strings). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Confirms the intended challenge path is solvable. If the flag is visible to unauthenticated crawlers it may also be leaked to untrusted users, revoking the challenge's difficulty.",
+        "remediation_patch": "```nginx\n# BEFORE: flag served to everyone in an HTML comment\n# <!-- flag{some-secret} -->\n\n# AFTER: flag endpoint gated behind the intended exploit marker\nlocation = /flag.txt {\n    deny all;                     # default deny\n    # 192.168.13.37 = lab scoring proxy / authenticated session\n    allow 192.168.13.37;\n    satisfy all;\n}\n```\nOperator actions: (1) log the capture in the run report, (2) revoke public read access to the leaking location, (3) rotate the flag value in the scoring system.",
+        "cwe_id": "CWE-200 (Exposure of Sensitive Information) / CWE-532",
+        "cvss_score": "7.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+        "threat_vector": "Direct Object Exfiltration / Privilege Token Harvest",
+        "reproduction_command": "curl -s http://{target}/path_with_flag",
+        "verification_test": "curl -s http://{target}/path_with_flag | grep -v 'flag{'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_ad80097d3ec5",
+      "asset_id": "asset_283f6afdc3f3",
+      "target": "target_binaries\\vuln_auth_daemon.elf",
+      "type": "ctf_planted_flag",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Planted CTF flag captured in binary vuln_auth_daemon.elf strings: ['flag{CyberForge_Live_Binary_Analysis_2026}']",
+      "evidence": [
+        {
+          "evidence_id": "evid_34a93aa4dcb5",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_auth_daemon.elf",
+          "hash": "874ab0d9c1f3afba3742bfa15013e882874f9ebff35b5effe682856101c1902d",
+          "timestamp": "2026-10-31T21:22:30+00:00",
+          "excerpt": "[\"flag{CyberForge_Live_Binary_Analysis_2026}\"]",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_f3c4ebd5142c",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "d2bf37c706ec02a9721ed0170ccb2365e6b79c70b53500f5f97a30bdf0c118f6",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Planted CTF flag literal confirmed in evidence",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Planted CTF flag captured",
+        "summary": "Record the capture in the run report (flag already confirmed as evidence). Then revoke whatever access leaked the flag early and rotate the flag value if uniqueness matters.",
+        "plain_english": "One of the competition's planted flags was recovered by the assessment: the host exposed the flag value where the scanner could read it (page body, HTML comment, HTTP header or binary strings). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Confirms the intended challenge path is solvable. If the flag is visible to unauthenticated crawlers it may also be leaked to untrusted users, revoking the challenge's difficulty.",
+        "remediation_patch": "```nginx\n# BEFORE: flag served to everyone in an HTML comment\n# <!-- flag{some-secret} -->\n\n# AFTER: flag endpoint gated behind the intended exploit marker\nlocation = /flag.txt {\n    deny all;                     # default deny\n    # 192.168.13.37 = lab scoring proxy / authenticated session\n    allow 192.168.13.37;\n    satisfy all;\n}\n```\nOperator actions: (1) log the capture in the run report, (2) revoke public read access to the leaking location, (3) rotate the flag value in the scoring system.",
+        "cwe_id": "CWE-200 (Exposure of Sensitive Information) / CWE-532",
+        "cvss_score": "7.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+        "threat_vector": "Direct Object Exfiltration / Privilege Token Harvest",
+        "reproduction_command": "curl -s http://{target}/path_with_flag",
+        "verification_test": "curl -s http://{target}/path_with_flag | grep -v 'flag{'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_2deae5225ba0",
+      "asset_id": "asset_31ad2c8e05db",
+      "target": "target_binaries\\vuln_worker.bin",
+      "type": "ctf_planted_flag",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "intelligence-gathering",
+      "summary": "Planted CTF flag captured in binary vuln_worker.bin strings: ['flag{cyberforge_crown_jewel_2026}']",
+      "evidence": [
+        {
+          "evidence_id": "evid_a5b3898456ae",
+          "source_tool": "binary_static_analysis",
+          "artifact_path": "target_binaries\\vuln_worker.bin",
+          "hash": "bfa84e0f038d6aaa4e84281816183d8d37ff18bb5392b6d1ebf384b2cfa367c6",
+          "timestamp": "2026-10-31T21:22:29+00:00",
+          "excerpt": "[\"flag{cyberforge_crown_jewel_2026}\"]",
+          "verification_method": "manual_review_required"
+        },
+        {
+          "evidence_id": "evid_5c6c756bc0ba",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "d2bf37c706ec02a9721ed0170ccb2365e6b79c70b53500f5f97a30bdf0c118f6",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Planted CTF flag literal confirmed in evidence",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Planted CTF flag captured",
+        "summary": "Record the capture in the run report (flag already confirmed as evidence). Then revoke whatever access leaked the flag early and rotate the flag value if uniqueness matters.",
+        "plain_english": "One of the competition's planted flags was recovered by the assessment: the host exposed the flag value where the scanner could read it (page body, HTML comment, HTTP header or binary strings). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Confirms the intended challenge path is solvable. If the flag is visible to unauthenticated crawlers it may also be leaked to untrusted users, revoking the challenge's difficulty.",
+        "remediation_patch": "```nginx\n# BEFORE: flag served to everyone in an HTML comment\n# <!-- flag{some-secret} -->\n\n# AFTER: flag endpoint gated behind the intended exploit marker\nlocation = /flag.txt {\n    deny all;                     # default deny\n    # 192.168.13.37 = lab scoring proxy / authenticated session\n    allow 192.168.13.37;\n    satisfy all;\n}\n```\nOperator actions: (1) log the capture in the run report, (2) revoke public read access to the leaking location, (3) rotate the flag value in the scoring system.",
+        "cwe_id": "CWE-200 (Exposure of Sensitive Information) / CWE-532",
+        "cvss_score": "7.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+        "threat_vector": "Direct Object Exfiltration / Privilege Token Harvest",
+        "reproduction_command": "curl -s http://{target}/path_with_flag",
+        "verification_test": "curl -s http://{target}/path_with_flag | grep -v 'flag{'",
+        "references": []
+      }
+    },
+    {
+      "finding_id": "find_c0fadeb94b4d",
+      "asset_id": "asset_f56eba07234d",
+      "target": "192.168.60.139",
+      "type": "ctf_planted_flag",
+      "severity": "high",
+      "status": "confirmed",
+      "confidence": "high",
+      "ptes_phase": "exploitation",
+      "summary": "Captured CTF Flag #2 via Game Zone Console: MITIGATA{r3v_b1n_cr4ft_p1d_t0_0wn_th3_z0n3}",
+      "evidence": [
+        {
+          "evidence_id": "evid_e5d1ba78358c",
+          "source_tool": "gamezone_probe",
+          "artifact_path": "192.168.60.139:8833",
+          "hash": "07f8e812ad34789acdf20aa4df33437af33d0675988b8883322a72ee1f611815",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "[\"MITIGATA{r3v_b1n_cr4ft_p1d_t0_0wn_th3_z0n3}\"]",
+          "verification_method": "live_network_probe"
+        },
+        {
+          "evidence_id": "evid_d38a63e70e67",
+          "source_tool": "verification_service",
+          "artifact_path": "",
+          "hash": "d2bf37c706ec02a9721ed0170ccb2365e6b79c70b53500f5f97a30bdf0c118f6",
+          "timestamp": "2026-10-31T21:23:02+00:00",
+          "excerpt": "Planted CTF flag literal confirmed in evidence",
+          "verification_method": "deterministic_playbook"
+        }
+      ],
+      "advisory": {
+        "title": "Planted CTF flag captured",
+        "summary": "Record the capture in the run report (flag already confirmed as evidence). Then revoke whatever access leaked the flag early and rotate the flag value if uniqueness matters.",
+        "plain_english": "One of the competition's planted flags was recovered by the assessment: the host exposed the flag value where the scanner could read it (page body, HTML comment, HTTP header or binary strings). This finding was CONFIRMED by the Verification Service.",
+        "impact": "[severity: high] Confirms the intended challenge path is solvable. If the flag is visible to unauthenticated crawlers it may also be leaked to untrusted users, revoking the challenge's difficulty.",
+        "remediation_patch": "```nginx\n# BEFORE: flag served to everyone in an HTML comment\n# <!-- flag{some-secret} -->\n\n# AFTER: flag endpoint gated behind the intended exploit marker\nlocation = /flag.txt {\n    deny all;                     # default deny\n    # 192.168.13.37 = lab scoring proxy / authenticated session\n    allow 192.168.13.37;\n    satisfy all;\n}\n```\nOperator actions: (1) log the capture in the run report, (2) revoke public read access to the leaking location, (3) rotate the flag value in the scoring system.",
+        "cwe_id": "CWE-200 (Exposure of Sensitive Information) / CWE-532",
+        "cvss_score": "7.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+        "threat_vector": "Direct Object Exfiltration / Privilege Token Harvest",
+        "reproduction_command": "curl -s http://{target}/path_with_flag",
+        "verification_test": "curl -s http://{target}/path_with_flag | grep -v 'flag{'",
+        "references": []
+      }
+    }
+  ],
+  "attack_paths": [
+    {
+      "score": 0.9,
+      "hop_count": 1,
+      "edges": [
+        {
+          "source": "asset_382ab00713e9",
+          "target": "asset_90654d730aed",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_4dff0a9bde8b"
+        }
+      ]
+    },
+    {
+      "score": 0.9,
+      "hop_count": 1,
+      "edges": [
+        {
+          "source": "asset_90654d730aed",
+          "target": "asset_f56eba07234d",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_cd6815ca72ba"
+        }
+      ]
+    },
+    {
+      "score": 0.9,
+      "hop_count": 1,
+      "edges": [
+        {
+          "source": "asset_f56eba07234d",
+          "target": "asset_283f6afdc3f3",
+          "technique": "BINARY_DAEMON_PROBE",
+          "confidence": "high",
+          "evidence_id": "evid_5915ad9510d9"
+        }
+      ]
+    },
+    {
+      "score": 0.9,
+      "hop_count": 1,
+      "edges": [
+        {
+          "source": "asset_f56eba07234d",
+          "target": "asset_283f6afdc3f3",
+          "technique": "FLAG_DISCLOSURE_PIDREQ",
+          "confidence": "high",
+          "evidence_id": "evid_7c8edfe1d9cc"
+        }
+      ]
+    },
+    {
+      "score": 0.9,
+      "hop_count": 1,
+      "edges": [
+        {
+          "source": "asset_f56eba07234d",
+          "target": "asset_382ab00713e9",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_5a90803c2861"
+        }
+      ]
+    },
+    {
+      "score": 0.81,
+      "hop_count": 2,
+      "edges": [
+        {
+          "source": "asset_382ab00713e9",
+          "target": "asset_90654d730aed",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_4dff0a9bde8b"
+        },
+        {
+          "source": "asset_90654d730aed",
+          "target": "asset_f56eba07234d",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_cd6815ca72ba"
+        }
+      ]
+    },
+    {
+      "score": 0.81,
+      "hop_count": 2,
+      "edges": [
+        {
+          "source": "asset_90654d730aed",
+          "target": "asset_f56eba07234d",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_cd6815ca72ba"
+        },
+        {
+          "source": "asset_f56eba07234d",
+          "target": "asset_283f6afdc3f3",
+          "technique": "BINARY_DAEMON_PROBE",
+          "confidence": "high",
+          "evidence_id": "evid_5915ad9510d9"
+        }
+      ]
+    },
+    {
+      "score": 0.81,
+      "hop_count": 2,
+      "edges": [
+        {
+          "source": "asset_90654d730aed",
+          "target": "asset_f56eba07234d",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_cd6815ca72ba"
+        },
+        {
+          "source": "asset_f56eba07234d",
+          "target": "asset_283f6afdc3f3",
+          "technique": "FLAG_DISCLOSURE_PIDREQ",
+          "confidence": "high",
+          "evidence_id": "evid_7c8edfe1d9cc"
+        }
+      ]
+    },
+    {
+      "score": 0.81,
+      "hop_count": 2,
+      "edges": [
+        {
+          "source": "asset_90654d730aed",
+          "target": "asset_f56eba07234d",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_cd6815ca72ba"
+        },
+        {
+          "source": "asset_f56eba07234d",
+          "target": "asset_382ab00713e9",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_5a90803c2861"
+        }
+      ]
+    },
+    {
+      "score": 0.81,
+      "hop_count": 2,
+      "edges": [
+        {
+          "source": "asset_f56eba07234d",
+          "target": "asset_382ab00713e9",
+          "technique": "REVERSE_PROXY_IP_SPOOFING",
+          "confidence": "high",
+          "evidence_id": "evid_5a90803c2861"
+        },
+        {
+          "source": "asset_382ab00713e9",
+          "target": "asset_90654d730aed",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_4dff0a9bde8b"
+        }
+      ]
+    },
+    {
+      "score": 0.7290000000000001,
+      "hop_count": 3,
+      "edges": [
+        {
+          "source": "asset_382ab00713e9",
+          "target": "asset_90654d730aed",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_4dff0a9bde8b"
+        },
+        {
+          "source": "asset_90654d730aed",
+          "target": "asset_f56eba07234d",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_cd6815ca72ba"
+        },
+        {
+          "source": "asset_f56eba07234d",
+          "target": "asset_283f6afdc3f3",
+          "technique": "BINARY_DAEMON_PROBE",
+          "confidence": "high",
+          "evidence_id": "evid_5915ad9510d9"
+        }
+      ]
+    },
+    {
+      "score": 0.7290000000000001,
+      "hop_count": 3,
+      "edges": [
+        {
+          "source": "asset_382ab00713e9",
+          "target": "asset_90654d730aed",
+          "technique": "ARTIFACT_VAULT_DOWNLOAD",
+          "confidence": "high",
+          "evidence_id": "evid_4dff0a9bde8b"
+        },
+        {
+          "source": "asset_90654d730aed",
+          "target": "asset_f56eba07234d",
+          "technique": "REVERSED_AUTH_PASSKEY",
+          "confidence": "high",
+          "evidence_id": "evid_cd6815ca72ba"
+        },
+        {
+          "source": "asset_f56eba07234d",
+          "target": "asset_283f6afdc3f3",
+          "technique": "FLAG_DISCLOSURE_PIDREQ",
+          "confidence": "high",
+          "evidence_id": "evid_7c8edfe1d9cc"
+        }
+      ]
+    }
+  ],
+  "metrics": {
+    "scope_safety_out_of_bounds_probes": 0,
+    "scope_decisions_allowed": 34,
+    "scope_decisions_denied": 0,
+    "total_assets_discovered": 6,
+    "total_services_discovered": 2,
+    "total_findings": 32,
+    "confirmed_findings": 32,
+    "verification_rate_pct": 100.0,
+    "false_alarm_rate_pct": 0.0,
+    "runtime_seconds": 33.0,
+    "autonomy_interventions": 0
+  },
+  "severity_counts": {
+    "critical": 1,
+    "high": 24,
+    "medium": 4,
+    "low": 2,
+    "info": 1
+  }
+}

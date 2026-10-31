@@ -1,0 +1,25 @@
+# Git & VCS
+.git/
+.gitignore
+
+# Python cache & virtual environments
+.venv/
+.venv*/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+
+# Developer scratch & local graph
+graphify-out/
+scratch/
+.env
+
+# SQLite locks
+*.db-wal
+*.db-shm
+

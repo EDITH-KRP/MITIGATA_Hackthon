@@ -43,11 +43,25 @@ UNSAFE_FUNCTIONS = {
     "gets": "Inherently dangerous input function with no length limit (CWE-242)",
     "system": "Command injection vulnerability if user input reaches argument (CWE-78)",
     "sprintf": "Format string / buffer overflow vulnerability (CWE-134)",
+    "vsprintf": "Variable format string / buffer overflow vulnerability (CWE-134)",
+    "vsnprintf": "Truncation or return value miscalculation risk (CWE-134)",
     "popen": "Process execution prone to command injection (CWE-78)",
     "strcat": "Unbounded string concatenation prone to buffer overflow (CWE-120)",
+    "strncat": "String concatenation prone to off-by-one null terminator overflow (CWE-193)",
     "execve": "Execution of external binaries via execve prone to command injection or memory corruption (CWE-78)",
     "execvp": "Process execution via execvp with PATH search prone to binary hijacking (CWE-78)",
     "execl": "Process execution via execl (CWE-78)",
+    "execv": "Process execution via execv (CWE-78)",
+    "execlp": "Process execution via execlp with PATH lookup (CWE-78)",
+    "mprotect": "Memory protection alteration capable of enabling RWX executable memory (CWE-732)",
+    "scanf": "Standard input parsing without width limit prone to buffer overrun (CWE-120)",
+    "sscanf": "String parsing without width limit prone to buffer overrun (CWE-120)",
+    "tmpnam": "Insecure temporary file creation prone to race conditions (CWE-377)",
+    "tempnam": "Insecure temporary file creation prone to symlink races (CWE-377)",
+    "mktemp": "Deprecated temporary file function prone to TOCTOU race conditions (CWE-377)",
+    "rand": "Weak pseudo-random number generator unsuitable for security tokens or cryptography (CWE-338)",
+    "srand": "Insecure PRNG seed initialization (CWE-338)",
+    "chroot": "Chroot jailbreak possible without matching chdir to directory root (CWE-272)",
 }
 
 UnsafeMatch = dict[str, list[str]]  # function name -> matched strings
@@ -447,6 +461,96 @@ class BinaryWorker:
                     verification_method="manual_review_required",
                 )
             )
+
+        # ---------------- Binary Hardening / Checksec Mitigations -----------
+        if header_info.get("format") == "ELF":
+            try:
+                raw_data = path.read_bytes()
+                # 1. Stack Canary Check
+                if b"__stack_chk_fail" not in raw_data and b"__stack_chk_guard" not in raw_data:
+                    finding_ids.append(
+                        self._emit_finding_with_evidence(
+                            asset_id=asset_id,
+                            finding_type="binary_missing_stack_canary",
+                            severity="medium",
+                            ptes_phase=PtesPhase.VULNERABILITY_ANALYSIS,
+                            summary=(
+                                f"Binary {path.name} lacks compiler stack canary protection (__stack_chk_fail absent). "
+                                f"Stack buffer overflows can hijack execution flow without stack-smashing detection (CWE-121)."
+                            ),
+                            confidence="high",
+                            source_tool="binary_static_analysis",
+                            artifact_path=str(path),
+                            file_hash=self.sha256(path),
+                            excerpt=f"checksec: canary=disabled; binary={path.name}; __stack_chk_fail=not_found",
+                            verification_method="manual_review_required",
+                        )
+                    )
+
+                # 2. PIE (Position Independent Executable) Check
+                if header_info.get("e_type") == 2:  # ET_EXEC
+                    finding_ids.append(
+                        self._emit_finding_with_evidence(
+                            asset_id=asset_id,
+                            finding_type="binary_no_pie",
+                            severity="medium",
+                            ptes_phase=PtesPhase.VULNERABILITY_ANALYSIS,
+                            summary=(
+                                f"Binary {path.name} is compiled without PIE (Position Independent Executable; e_type=ET_EXEC). "
+                                f"Code segment loads at fixed base address, bypassing ASLR and facilitating ROP attacks (CWE-119)."
+                            ),
+                            confidence="high",
+                            source_tool="binary_static_analysis",
+                            artifact_path=str(path),
+                            file_hash=self.sha256(path),
+                            excerpt=f"checksec: pie=disabled (ET_EXEC); base_addr=0x400000; binary={path.name}",
+                            verification_method="manual_review_required",
+                        )
+                    )
+
+                # 3. RELRO Check
+                if b"GNU_RELRO" not in raw_data:
+                    finding_ids.append(
+                        self._emit_finding_with_evidence(
+                            asset_id=asset_id,
+                            finding_type="binary_no_relro",
+                            severity="medium",
+                            ptes_phase=PtesPhase.VULNERABILITY_ANALYSIS,
+                            summary=(
+                                f"Binary {path.name} lacks Read-Only Relocations (RELRO). "
+                                f"The Global Offset Table (GOT) remains writable, making function pointers vulnerable to PLT/GOT overwrite (CWE-732)."
+                            ),
+                            confidence="high",
+                            source_tool="binary_static_analysis",
+                            artifact_path=str(path),
+                            file_hash=self.sha256(path),
+                            excerpt=f"checksec: relro=no_relro; GNU_RELRO=not_found; binary={path.name}",
+                            verification_method="manual_review_required",
+                        )
+                    )
+
+                # 4. Executable Stack / NX Check
+                if b"GNU_STACK" not in raw_data:
+                    finding_ids.append(
+                        self._emit_finding_with_evidence(
+                            asset_id=asset_id,
+                            finding_type="binary_missing_nx_stack",
+                            severity="high",
+                            ptes_phase=PtesPhase.VULNERABILITY_ANALYSIS,
+                            summary=(
+                                f"Binary {path.name} lacks explicit non-executable stack header (GNU_STACK absent). "
+                                f"Executable stack memory violates W^X memory protection and allows direct shellcode execution (CWE-732)."
+                            ),
+                            confidence="high",
+                            source_tool="binary_static_analysis",
+                            artifact_path=str(path),
+                            file_hash=self.sha256(path),
+                            excerpt=f"checksec: nx=disabled_or_missing; GNU_STACK=not_found; binary={path.name}",
+                            verification_method="manual_review_required",
+                        )
+                    )
+            except (OSError, ValueError):
+                pass
 
         return finding_ids
 

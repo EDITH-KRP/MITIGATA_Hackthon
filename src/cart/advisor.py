@@ -795,6 +795,196 @@ _PATCH_EXAMPLES: dict[str, dict[str, str]] = {
             "```"
         ),
     },
+    "binary_missing_stack_canary": {
+        "cwe_id": "CWE-121 (Stack-based Buffer Overflow)",
+        "cvss_score": "7.8",
+        "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+        "threat_vector": "Local / Remote Binary Memory Corruption",
+        "reproduction_command": "checksec --file={target}",
+        "verification_test": "readelf -s {target} | grep __stack_chk_fail",
+
+        "title": "Missing Compiler Stack Canary Protection in Binary",
+        "plain_english_summary": (
+            "The binary was compiled without stack canary protection (-fno-stack-protector). "
+            "Stack frames cannot detect buffer overruns, enabling control-flow hijacking (CWE-121)."
+        ),
+        "impact": (
+            "Direct return-address overwriting leading to arbitrary code execution."
+        ),
+        "recommended_fix": (
+            "Recompile the binary with '-fstack-protector-strong' or '-fstack-protector-all'."
+        ),
+        "patch_example": (
+            "```makefile\n"
+            "# Enable compiler stack canary guards in GCC/Clang\n"
+            "CFLAGS += -fstack-protector-strong -D_FORTIFY_SOURCE=2\n"
+            "```"
+        ),
+    },
+    "binary_no_pie": {
+        "cwe_id": "CWE-119 (Improper Restriction of Operations within Memory)",
+        "cvss_score": "6.5",
+        "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+        "threat_vector": "ASLR Bypass / Return-Oriented Programming (ROP)",
+        "reproduction_command": "readelf -h {target} | grep Type",
+        "verification_test": "readelf -h {target} | grep 'DYN (Position-Independent Executable)'",
+
+        "title": "Disabled Position Independent Executable (PIE) in Binary",
+        "plain_english_summary": (
+            "The binary was compiled as a static ET_EXEC instead of a Position Independent Executable (PIE). "
+            "All code sections are loaded at fixed virtual memory addresses (e.g. 0x400000), allowing ASLR bypass."
+        ),
+        "impact": (
+            "Facilitates Return-Oriented Programming (ROP) attacks without requiring a memory disclosure leak."
+        ),
+        "recommended_fix": (
+            "Compile with '-fPIE' and link with '-pie'."
+        ),
+        "patch_example": (
+            "```makefile\n"
+            "# Compile and link with Position Independent Executable flags\n"
+            "CFLAGS += -fPIE\n"
+            "LDFLAGS += -pie\n"
+            "```"
+        ),
+    },
+    "binary_no_relro": {
+        "cwe_id": "CWE-732 (Incorrect Permission Assignment for Critical Resource)",
+        "cvss_score": "7.1",
+        "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+        "threat_vector": "Global Offset Table (GOT) Overwrite / PLT Hijacking",
+        "reproduction_command": "readelf -l {target} | grep GNU_RELRO",
+        "verification_test": "readelf -l {target} | grep 'GNU_RELRO.*flags.*R'",
+
+        "title": "Writable Global Offset Table (Missing Full RELRO)",
+        "plain_english_summary": (
+            "The binary lacks Full RELRO (Read-Only Relocations). "
+            "The Global Offset Table (GOT) remains writable at runtime, allowing attackers to overwrite dynamic function pointers."
+        ),
+        "impact": (
+            "Attackers can hijack library calls (such as exit, printf, or puts) to redirect execution flow."
+        ),
+        "recommended_fix": (
+            "Link the binary with '-Wl,-z,relro,-z,now' to enforce immediate binding and read-only GOT pages."
+        ),
+        "patch_example": (
+            "```makefile\n"
+            "# Enforce Full RELRO linking\n"
+            "LDFLAGS += -Wl,-z,relro,-z,now\n"
+            "```"
+        ),
+    },
+    "binary_missing_nx_stack": {
+        "cwe_id": "CWE-732 (Incorrect Permission Assignment for Memory Page)",
+        "cvss_score": "8.4",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        "threat_vector": "Executable Stack Shellcode Injection",
+        "reproduction_command": "readelf -l {target} | grep GNU_STACK",
+        "verification_test": "readelf -l {target} | grep 'GNU_STACK.*RW '",
+
+        "title": "Executable Memory Stack Risk (Missing NX / DEP Protection)",
+        "plain_english_summary": (
+            "The binary lacks an explicit non-executable stack header (GNU_STACK), meaning the operating system "
+            "may allocate executable memory on the thread stack, violating W^X (Write XOR Execute) guarantees."
+        ),
+        "impact": (
+            "Direct execution of shellcode payloads injected onto the stack during buffer overflow exploitation."
+        ),
+        "recommended_fix": (
+            "Link with '-Wl,-z,noexecstack' to enforce non-executable stack memory."
+        ),
+        "patch_example": (
+            "```makefile\n"
+            "# Disallow executable stack pages\n"
+            "LDFLAGS += -Wl,-z,noexecstack\n"
+            "```"
+        ),
+    },
+    "clickjacking_missing_frame_options": {
+        "cwe_id": "CWE-1021 (Improper Restriction of Rendered UI Layers)",
+        "cvss_score": "5.4",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:L/A:N",
+        "threat_vector": "UI Redressing / Malicious Iframe Embedding",
+        "reproduction_command": "curl -I {target}",
+        "verification_test": "curl -I {target} | grep -i 'X-Frame-Options: DENY'",
+
+        "title": "Missing Anti-Framing Protection (Clickjacking Vulnerability)",
+        "plain_english_summary": (
+            "The web application does not set an X-Frame-Options or Content-Security-Policy frame-ancestors header. "
+            "External websites can embed this application within a hidden iframe to trick users into performing unintentional actions."
+        ),
+        "impact": (
+            "Users can be lured into clicking hidden buttons to trigger transfers, state changes, or settings modifications."
+        ),
+        "recommended_fix": (
+            "Add 'X-Frame-Options: DENY' (or 'SAMEORIGIN') and CSP 'frame-ancestors 'none''."
+        ),
+        "patch_example": (
+            "```nginx\n"
+            "# Protect against clickjacking in Nginx\n"
+            "add_header X-Frame-Options 'SAMEORIGIN' always;\n"
+            "add_header Content-Security-Policy \"frame-ancestors 'self';\" always;\n"
+            "```"
+        ),
+    },
+    "form_missing_csrf_token": {
+        "cwe_id": "CWE-352 (Cross-Site Request Forgery)",
+        "cvss_score": "6.5",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:H/A:N",
+        "threat_vector": "Cross-Site Request Forgery (CSRF)",
+        "reproduction_command": "curl -v -X POST {target}",
+        "verification_test": "grep -i 'csrf' form_template.html",
+
+        "title": "HTML State-Changing Form Lacking Anti-CSRF Token",
+        "plain_english_summary": (
+            "A form using the POST method does not include a cryptographically random, unpredictable anti-CSRF token. "
+            "An attacker can craft a malicious third-party website that silently submits transactions on behalf of an authenticated victim."
+        ),
+        "impact": (
+            "Unintended state modifications including password changes, email updates, and account actions."
+        ),
+        "recommended_fix": (
+            "Incorporate a server-validated CSRF token into all state-changing HTML forms and use SameSite cookies."
+        ),
+        "patch_example": (
+            "```html\n"
+            "<!-- Include CSRF token in all POST forms -->\n"
+            "<form method=\"POST\" action=\"/update-profile\">\n"
+            "  <input type=\"hidden\" name=\"csrf_token\" value=\"{{ session.csrf_token }}\">\n"
+            "  <button type=\"submit\">Save</button>\n"
+            "</form>\n"
+            "```"
+        ),
+    },
+    "insecure_http_password_field": {
+        "cwe_id": "CWE-319 (Cleartext Transmission of Sensitive Information)",
+        "cvss_score": "8.1",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:H/A:N",
+        "threat_vector": "Network Eavesdropping / Man-in-the-Middle (MitM)",
+        "reproduction_command": "curl -s {target} | grep 'type=\"password\"'",
+        "verification_test": "curl -sI https://{target} | grep 'HTTP/.* 200'",
+
+        "title": "Cleartext Transmission of Passwords over Unencrypted HTTP",
+        "plain_english_summary": (
+            "The application renders a login or password input form over unencrypted HTTP. "
+            "Credentials typed into this form travel in plain text across local Wi-Fi, ISPs, and transit routers."
+        ),
+        "impact": (
+            "Immediate credential harvesting by local attackers via network packet capturing (Wireshark/tcpdump)."
+        ),
+        "recommended_fix": (
+            "Enforce HTTPS across all pages that display or process password fields, and redirect HTTP to HTTPS."
+        ),
+        "patch_example": (
+            "```nginx\n"
+            "# Redirect all HTTP traffic to HTTPS\n"
+            "server {\n"
+            "    listen 80 default_server;\n"
+            "    return 301 https://$host$request_uri;\n"
+            "}\n"
+            "```"
+        ),
+    },
 }
 
 _DEFAULT_TEMPLATE = {

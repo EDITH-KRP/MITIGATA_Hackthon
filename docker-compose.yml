@@ -1,0 +1,16 @@
+services:
+  cart:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cyberforge-cart
+    ports:
+      - "8080:8080"
+    volumes:
+      # Mount reports and test binaries for persistence
+      - ./reports:/app/reports
+      - ./target_binaries:/app/target_binaries
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+

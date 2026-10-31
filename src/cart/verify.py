@@ -373,6 +373,104 @@ def _playbook_sensitive_file_exposure(
     return FindingStatus.INCONCLUSIVE, "low", "Could not confirm sensitive file content"
 
 
+def _playbook_binary_missing_stack_canary(
+    finding: dict, evidence_list: list[dict]
+) -> tuple[FindingStatus, str, str]:
+    for ev in evidence_list:
+        excerpt = ev.get("excerpt", "")
+        if "canary=disabled" in excerpt or "__stack_chk_fail" in excerpt:
+            return (
+                FindingStatus.CONFIRMED,
+                "high",
+                "Absence of compiler stack-canary instrumentation (__stack_chk_fail) confirmed in binary",
+            )
+    return FindingStatus.INCONCLUSIVE, "low", "Could not verify stack canary status"
+
+
+def _playbook_binary_no_pie(
+    finding: dict, evidence_list: list[dict]
+) -> tuple[FindingStatus, str, str]:
+    for ev in evidence_list:
+        excerpt = ev.get("excerpt", "")
+        if "pie=disabled" in excerpt or "ET_EXEC" in excerpt or "0x400000" in excerpt:
+            return (
+                FindingStatus.CONFIRMED,
+                "high",
+                "Non-PIE executable format (ET_EXEC fixed virtual address) confirmed in ELF header",
+            )
+    return FindingStatus.INCONCLUSIVE, "low", "Could not verify PIE status"
+
+
+def _playbook_binary_no_relro(
+    finding: dict, evidence_list: list[dict]
+) -> tuple[FindingStatus, str, str]:
+    for ev in evidence_list:
+        excerpt = ev.get("excerpt", "")
+        if "relro" in excerpt.lower() or "GNU_RELRO" in excerpt:
+            return (
+                FindingStatus.CONFIRMED,
+                "high",
+                "Missing Read-Only Relocations (RELRO) verified: writable Global Offset Table (GOT)",
+            )
+    return FindingStatus.INCONCLUSIVE, "low", "Could not verify RELRO status"
+
+
+def _playbook_binary_missing_nx_stack(
+    finding: dict, evidence_list: list[dict]
+) -> tuple[FindingStatus, str, str]:
+    for ev in evidence_list:
+        excerpt = ev.get("excerpt", "")
+        if "nx=disabled" in excerpt or "GNU_STACK" in excerpt:
+            return (
+                FindingStatus.CONFIRMED,
+                "high",
+                "Executable memory stack risk verified: GNU_STACK non-executable header absent",
+            )
+    return FindingStatus.INCONCLUSIVE, "low", "Could not verify stack executable status"
+
+
+def _playbook_clickjacking_missing_frame_options(
+    finding: dict, evidence_list: list[dict]
+) -> tuple[FindingStatus, str, str]:
+    for ev in evidence_list:
+        excerpt = ev.get("excerpt", "")
+        if "X-Frame-Options=None" in excerpt or "frame-ancestors=None" in excerpt:
+            return (
+                FindingStatus.CONFIRMED,
+                "high",
+                "Absence of anti-framing headers (X-Frame-Options / frame-ancestors) confirmed",
+            )
+    return FindingStatus.INCONCLUSIVE, "low", "Could not verify clickjacking framing defenses"
+
+
+def _playbook_form_missing_csrf_token(
+    finding: dict, evidence_list: list[dict]
+) -> tuple[FindingStatus, str, str]:
+    for ev in evidence_list:
+        excerpt = ev.get("excerpt", "")
+        if "method=POST" in excerpt:
+            return (
+                FindingStatus.CONFIRMED,
+                "high",
+                "State-changing POST form without anti-CSRF token confirmed",
+            )
+    return FindingStatus.INCONCLUSIVE, "low", "Could not verify form CSRF defense"
+
+
+def _playbook_insecure_http_password_field(
+    finding: dict, evidence_list: list[dict]
+) -> tuple[FindingStatus, str, str]:
+    for ev in evidence_list:
+        excerpt = ev.get("excerpt", "")
+        if "scheme=http" in excerpt and "password" in excerpt.lower():
+            return (
+                FindingStatus.CONFIRMED,
+                "high",
+                "Transmission of password credentials over plaintext HTTP verified",
+            )
+    return FindingStatus.INCONCLUSIVE, "low", "Could not verify insecure password input"
+
+
 _PLAYBOOKS: dict[str, object] = {
     "web_form_endpoint": _playbook_web_form_endpoint,
     "binary_hardcoded_credential": _playbook_binary_hardcoded_credential,
@@ -381,9 +479,16 @@ _PLAYBOOKS: dict[str, object] = {
     "binary_debug_artifact": _playbook_binary_debug_artifact,
     "ctf_planted_flag": _playbook_ctf_planted_flag,
     "binary_unsafe_function": _playbook_binary_unsafe_function,
+    "binary_missing_stack_canary": _playbook_binary_missing_stack_canary,
+    "binary_no_pie": _playbook_binary_no_pie,
+    "binary_no_relro": _playbook_binary_no_relro,
+    "binary_missing_nx_stack": _playbook_binary_missing_nx_stack,
     "cleartext_http_authentication": _playbook_cleartext_http_authentication,
     "insecure_cookie_attributes": _playbook_insecure_cookie_attributes,
     "missing_security_headers": _playbook_missing_security_headers,
+    "clickjacking_missing_frame_options": _playbook_clickjacking_missing_frame_options,
+    "form_missing_csrf_token": _playbook_form_missing_csrf_token,
+    "insecure_http_password_field": _playbook_insecure_http_password_field,
     "server_banner_disclosure": _playbook_server_banner_disclosure,
     "unencrypted_cleartext_service": _playbook_unencrypted_cleartext_service,
     "non_standard_service_port": _playbook_non_standard_service_port,

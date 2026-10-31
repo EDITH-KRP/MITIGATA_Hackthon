@@ -561,6 +561,21 @@ class WebWorker:
             )
             fids.append(fid)
 
+        # 6. Clickjacking / Missing Anti-Framing Protection
+        csp = headers.get("Content-Security-Policy", "").lower()
+        if not headers.get("X-Frame-Options") and "frame-ancestors" not in csp:
+            summary = (
+                f"Application at {page_url} lacks anti-framing defenses (missing X-Frame-Options and frame-ancestors). "
+                "The endpoint can be embedded in malicious iframes, enabling UI Redressing / Clickjacking attacks (CWE-1021)."
+            )
+            fid = self._emit_finding(
+                task, asset_id, "clickjacking_missing_frame_options", "medium",
+                PtesPhase.VULNERABILITY_ANALYSIS, summary,
+                page_url, f"url={page_url}; X-Frame-Options=None; frame-ancestors=None",
+                confidence="high",
+            )
+            fids.append(fid)
+
         return fids
 
     def _crawl(
@@ -586,6 +601,13 @@ class WebWorker:
             "/ftp",
             "/.env",
             "/.git/HEAD",
+            "/admin",
+            "/swagger.json",
+            "/openapi.json",
+            "/actuator/health",
+            "/console",
+            "/config.php.bak",
+            "/web.config.bak",
         ]
         target_roots: set[str] = set()
         for b_url in (base_urls if isinstance(base_urls, list) else [base_urls]):
@@ -818,6 +840,45 @@ class WebWorker:
                         if form["inputs"]:
                             fid = self._emit_form_finding(task, asset_ip, url, form)
                             finding_ids.append(fid)
+
+                            input_names = [i.get("name", "").lower() for i in form["inputs"]]
+                            input_types = [i.get("type", "").lower() for i in form["inputs"]]
+                            asset_id = self._get_or_create_asset("web_app", asset_ip)
+
+                            # Check for missing anti-CSRF token on state-changing forms
+                            if form.get("method") == "POST":
+                                has_csrf = any(
+                                    any(k in n for k in ("csrf", "token", "authenticity", "_csrf"))
+                                    for n in input_names
+                                )
+                                if not has_csrf:
+                                    csrf_fid = self._emit_finding(
+                                        task,
+                                        asset_id,
+                                        "form_missing_csrf_token",
+                                        "medium",
+                                        PtesPhase.VULNERABILITY_ANALYSIS,
+                                        f"State-changing HTML form (action={form.get('action')}) at {url} lacks anti-CSRF token (CWE-352).",
+                                        url,
+                                        f"form_action={form.get('action')}; method=POST; inputs={input_names}",
+                                        confidence="high",
+                                    )
+                                    finding_ids.append(csrf_fid)
+
+                            # Check for cleartext password transmission
+                            if url.startswith("http://") and "password" in input_types:
+                                pwd_fid = self._emit_finding(
+                                    task,
+                                    asset_id,
+                                    "insecure_http_password_field",
+                                    "high",
+                                    PtesPhase.VULNERABILITY_ANALYSIS,
+                                    f"HTML form at {url} accepts credentials/passwords over unencrypted HTTP (CWE-319, CWE-523).",
+                                    url,
+                                    f"form_action={form.get('action')}; scheme=http; inputs={input_names}",
+                                    confidence="high",
+                                )
+                                finding_ids.append(pwd_fid)
                 else:
                     try:
                         non_html_text = body.decode(errors="replace")

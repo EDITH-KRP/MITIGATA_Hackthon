@@ -618,7 +618,7 @@ pre.report-pre { white-space: pre-wrap; font-family: Consolas, monospace; font-s
   </p>
   <div style="display:flex; gap:0.8rem; align-items:center; flex-wrap:wrap;">
     <div style="flex:1; min-width:280px;">
-      <input type="text" id="target-input" value="http://192.168.60.139/" placeholder="e.g. http://192.168.60.139/ or https://lab.ctf.io/ or 10.10.10.5 or 192.168.60.0/24" 
+      <input type="text" id="target-input" value="" placeholder="Enter target URL or IP (e.g. http://192.168.60.139/ or https://preview.owasp-juice.shop/ or 10.10.10.5)" 
              style="width:100%; background:var(--code-bg); border:1px solid var(--panel-border); color:var(--text); padding:0.6rem 0.9rem; border-radius:6px; font-family:Consolas, monospace; font-size:0.88rem;">
     </div>
     <div style="width:160px;">
@@ -701,23 +701,23 @@ pre.report-pre { white-space: pre-wrap; font-family: Consolas, monospace; font-s
 <div class="grid">
   <div class="col-3 card">
     <div class="card-header">Scope Safety</div>
-    <div class="metric-val" id="metric-safety" style="color:var(--green);">0 Leaks</div>
-    <div class="metric-sub" id="metric-safety-sub">0 out-of-scope probes blocked</div>
+    <div class="metric-val" id="metric-safety" style="color:var(--text-subtle);">—</div>
+    <div class="metric-sub" id="metric-safety-sub">Awaiting target launch</div>
   </div>
   <div class="col-3 card">
     <div class="card-header">Autonomy Post-Start</div>
-    <div class="metric-val" id="metric-autonomy" style="color:var(--accent);">100%</div>
-    <div class="metric-sub">0 human interventions required</div>
+    <div class="metric-val" id="metric-autonomy" style="color:var(--text-subtle);">—</div>
+    <div class="metric-sub" id="metric-autonomy-sub">Awaiting target launch</div>
   </div>
   <div class="col-3 card">
     <div class="card-header">Verified Findings</div>
-    <div class="metric-val" id="metric-findings">0 / 0</div>
-    <div class="metric-sub" id="metric-findings-sub">0% verification rate</div>
+    <div class="metric-val" id="metric-findings" style="color:var(--text-subtle);">—</div>
+    <div class="metric-sub" id="metric-findings-sub">Awaiting target launch</div>
   </div>
   <div class="col-3 card">
     <div class="card-header">Discovered Assets</div>
-    <div class="metric-val" id="metric-assets">0</div>
-    <div class="metric-sub" id="metric-assets-sub">0 open services identified</div>
+    <div class="metric-val" id="metric-assets" style="color:var(--text-subtle);">—</div>
+    <div class="metric-sub" id="metric-assets-sub">Awaiting target launch</div>
   </div>
 </div>
 
@@ -867,13 +867,6 @@ async function loadRuns() {
     const runs = await res.json();
     const selector = document.getElementById('run-selector');
     if (!selector) return;
-
-    if (!currentRunId) {
-      const runningRun = runs.find(r => r.status === 'running');
-      if (runningRun) {
-        currentRunId = runningRun.run_id;
-      }
-    }
 
     selector.innerHTML = '';
     const idleOpt = document.createElement('option');
@@ -1049,20 +1042,35 @@ async function refreshData() {
 }
 
 function renderStatus(data) {
+  const isIdle = !currentRunId || data.status === 'idle' || data.run_id === 'none';
   const badge = document.getElementById('run-badge');
-  badge.textContent = data.status.toUpperCase();
+  badge.textContent = isIdle ? 'IDLE' : data.status.toUpperCase();
   badge.className = 'badge ' + (
+    isIdle ? 'badge-idle' :
     data.status === 'running' ? 'badge-running' :
     data.status === 'partial' ? 'badge-partial' :
     data.status === 'completed' ? 'badge-completed' : 'badge-idle'
   );
 
-  document.getElementById('metric-safety').textContent = `${data.metrics.scope_safety_out_of_bounds_probes} Leaks`;
-  document.getElementById('metric-safety-sub').textContent = `${data.metrics.scope_decisions_denied} out-of-scope probes blocked`;
-  document.getElementById('metric-findings').textContent = `${data.metrics.confirmed_findings} / ${data.metrics.total_findings}`;
-  document.getElementById('metric-findings-sub').textContent = `${data.metrics.verification_rate_pct}% verification rate`;
-  document.getElementById('metric-assets').textContent = data.metrics.total_assets_discovered;
-  document.getElementById('metric-assets-sub').textContent = `${data.metrics.total_services_discovered} open services identified`;
+  if (isIdle) {
+    document.getElementById('metric-safety').textContent = '—';
+    document.getElementById('metric-safety-sub').textContent = 'Awaiting target launch';
+    document.getElementById('metric-autonomy').textContent = '—';
+    document.getElementById('metric-autonomy-sub').textContent = 'Awaiting target launch';
+    document.getElementById('metric-findings').textContent = '—';
+    document.getElementById('metric-findings-sub').textContent = 'Awaiting target launch';
+    document.getElementById('metric-assets').textContent = '—';
+    document.getElementById('metric-assets-sub').textContent = 'Awaiting target launch';
+  } else {
+    document.getElementById('metric-safety').textContent = `${data.metrics.scope_safety_out_of_bounds_probes} Leaks`;
+    document.getElementById('metric-safety-sub').textContent = `${data.metrics.scope_decisions_denied} out-of-scope probes blocked`;
+    document.getElementById('metric-autonomy').textContent = '100%';
+    document.getElementById('metric-autonomy-sub').textContent = `${data.metrics.autonomy_interventions} human interventions required`;
+    document.getElementById('metric-findings').textContent = `${data.metrics.confirmed_findings} / ${data.metrics.total_findings}`;
+    document.getElementById('metric-findings-sub').textContent = `${data.metrics.verification_rate_pct}% verification rate`;
+    document.getElementById('metric-assets').textContent = data.metrics.total_assets_discovered;
+    document.getElementById('metric-assets-sub').textContent = `${data.metrics.total_services_discovered} open services identified`;
+  }
 
   const banner = document.getElementById('completion-banner');
   const iconEl = document.getElementById('status-icon');
@@ -1071,7 +1079,9 @@ function renderStatus(data) {
   const actionBtn = document.getElementById('status-action-btn');
 
   if (banner) {
-    if (data.status === 'completed') {
+    if (isIdle) {
+      banner.style.display = 'none';
+    } else if (data.status === 'completed') {
       banner.style.display = 'block';
       banner.className = 'status-banner';
       if (iconEl) {
@@ -2182,16 +2192,6 @@ class DashboardHandler(http.server.BaseHTTPRequestHandler):
             "LEFT JOIN scope_manifests sm ON r.scope_version = sm.scope_version "
             "ORDER BY r.rowid DESC LIMIT 40"
         ).fetchall()
-        row_ids = [r[0] for r in rows]
-        if "run_a41f9facb5fe" not in row_ids:
-            flag_row = conn.execute(
-                "SELECT r.run_id, r.status, r.tier, r.started_at, r.completed_at, sm.included_prefixes, sm.included_hosts "
-                "FROM runs r "
-                "LEFT JOIN scope_manifests sm ON r.scope_version = sm.scope_version "
-                "WHERE r.run_id = 'run_a41f9facb5fe'"
-            ).fetchone()
-            if flag_row:
-                rows.append(flag_row)
 
         runs = []
         for rid, status, tier, started, completed, prefixes_json, hosts_json in rows:
@@ -2208,16 +2208,7 @@ class DashboardHandler(http.server.BaseHTTPRequestHandler):
             crit = f_counts.get("critical", 0)
             high = f_counts.get("high", 0)
 
-            if rid == "run_a41f9facb5fe":
-                label = f"Mitigata CTF Lab — {non_info} Vulns ({crit} Critical, Flag Exploits)"
-            elif "juice-shop" in target_str.lower():
-                label = f"OWASP Juice Shop — {non_info} Vulns (Live APIs & Recon)"
-            elif "192.168.60" in target_str:
-                label = f"Mitigata Lab ({rid[:10]}…) — {non_info} Vulns"
-                if crit > 0:
-                    label += f", {crit} Critical"
-            else:
-                label = f"{target_str} ({rid[:10]}…) — {non_info} Vulns ({status.upper()})"
+            label = f"{target_str} ({rid[:10]}…) — {non_info} Vulns ({status.upper()})"
 
             runs.append({
                 "run_id": rid,
@@ -2233,19 +2224,9 @@ class DashboardHandler(http.server.BaseHTTPRequestHandler):
                 "label": label,
             })
 
-        # Priority sort: 1. Running runs -> 2. Flagship Mitigata 23-vuln run -> 3. Newest runs
-        runs.sort(
-            key=lambda r: (
-                0 if r["status"] == "running" else (1 if r["run_id"] == "run_a41f9facb5fe" else 2),
-                r["started_at"] or "",
-            ),
-            reverse=False,
-        )
-        # For the non-priority tier (key=2), sort by started_at descending
-        priority = [r for r in runs if r["status"] == "running" or r["run_id"] == "run_a41f9facb5fe"]
-        others = [r for r in runs if r["status"] != "running" and r["run_id"] != "run_a41f9facb5fe"]
-        others.sort(key=lambda r: r["started_at"] or "", reverse=True)
-        runs = priority + others
+        runs.sort(key=lambda r: r["started_at"] or "", reverse=True)
+        conn.close()
+        self._send_json(runs)
 
         conn.close()
         self._send_json(runs)

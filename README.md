@@ -1,118 +1,246 @@
-# CyberForge CART (Controlled Autonomous Red Teaming)
+# CyberForge CART
+### Controlled Autonomous Red Teaming & Assessment Engine
 
-> **Autonomous Assessment Engine for Organiser-Designated Labs, CTFs & Enterprise Networks**  
-> Built strictly under the **Penetration Testing Execution Standard (PTES)** with **Fail-Closed Zero-Trust Scope Safety**.
-
----
-
-## ⚡ Executive Summary for Judges
-
-**CyberForge CART** is an autonomous, multi-agent penetration-testing engine designed to audit network services, modern web applications, and compiled native binaries with **100% post-start autonomy** (zero human intervention).
-
-### Core Pillars of CART:
-1. **Scope Safety First (Fail-Closed PolicyGate)**: Prohibits out-of-bounds traffic. Every packet, socket connection, HTTP request, or binary access is cryptographically audited against a locked scope manifest before transmission.
-2. **Determinism Owns State**: Scheduling, deduplication, budget constraints, and verification outcomes live in deterministic Python + SQLite. LLM output is strictly advisory and can never alter execution state or confirm findings on its own.
-3. **Evidence Before Claims (Zero False Positives)**: Findings remain `CANDIDATE` until the **Deterministic Verification Service** independently confirms them via automated proof-of-concept playbooks.
-4. **Complete PTES Lifecycle**: Fully maps intelligence gathering, threat modeling, vulnerability analysis, and exploitation into a publication-grade executive report with remediation patches.
-5. **Modern 3-Color Dark UI Dashboard**: Clean, real-time reactive interface (Background `#090d16`, Text `#f8fafc`, Gradient `#38bdf8` to `#818cf8`) featuring interactive attack graph visualization and one-click PDF generation.
+[![PTES v1.0 Compliant](https://img.shields.io/badge/PTES-v1.0_Compliant-0ea5e9?style=flat-square)](http://www.pentest-standard.org/)
+[![Scope Policy](https://img.shields.io/badge/Security-Fail--Closed_PolicyGate-10b981?style=flat-square)](docs/safety.md)
+[![Verification Engine](https://img.shields.io/badge/Verification-Deterministic_Playbooks-6366f1?style=flat-square)](src/cart/verify.py)
+[![Test Suite](https://img.shields.io/badge/Tests-43_Passing-22c55e?style=flat-square)](tests/test_cart.py)
+[![Python Version](https://img.shields.io/badge/Python-3.11_%7C_3.12_%7C_3.13-blue?style=flat-square)](pyproject.toml)
+[![Container](https://img.shields.io/badge/Docker-Ready-38bdf8?style=flat-square)](Dockerfile)
+[![License](https://img.shields.io/badge/License-Proprietary-64748b?style=flat-square)](AGENTS.md)
 
 ---
 
-## 🏛️ System Architecture
+## Executive Overview
+
+**CyberForge CART** (Controlled Autonomous Red Teaming) is an enterprise-grade autonomous security assessment engine designed for organiser-designated CTF laboratories, hybrid cloud infrastructures, and scoped enterprise perimeters. 
+
+Operating under the strict lifecycle of the **Penetration Testing Execution Standard (PTES)**, CART coordinates bounded, specialized worker agents across three concurrent attack surfaces: **Network Infrastructure**, **Web Applications**, and **Native Compiled Binaries**.
+
+Unlike fragile LLM-only scanners, CART is built on the fundamental principle of **Deterministic State Ownership**: scheduling, scope enforcement, deduplication, evidence hashing, and vulnerability verification are governed entirely by deterministic Python and SQLite state machines. AI and heuristics remain strictly advisory and can never mutate state or promote unverified claims.
+
+---
+
+## Architectural Principles
+
+```
+  ┌────────────────────────────────────────────────────────────────────────┐
+  │                           CORE PILLARS OF CART                         │
+  ├──────────────────────────────────┬─────────────────────────────────────┤
+  │ 1. Zero-Trust Scope Safety       │ Fails closed on all outbound probes │
+  │ 2. Deterministic State Ownership │ SQLite WAL core; zero LLM drift     │
+  │ 3. Evidence Before Claims        │ 100% verified PoCs; no hallucinations│
+  │ 4. Full Tri-Surface Auditing     │ Network + Web + Binary Static/ELF   │
+  │ 5. Actionable Remediation        │ Git-appliable unified diff patches  │
+  └──────────────────────────────────┴─────────────────────────────────────┘
+```
+
+1. **Zero-Trust Scope Safety (`PolicyGate`)**:
+   Every packet, socket handshake, HTTP probe, or binary file request is evaluated against a cryptographically locked `ScopeManifest` before transmission. If an IP, CIDR prefix, domain, or file hash is not explicitly pre-approved, the gate drops the request immediately and records the violation in the audit log.
+2. **Deterministic State Machine**:
+   Task dependencies, rate limits, timeouts, and state transitions are executed in deterministic code. The core system runs locally without requiring cloud API keys or external LLM connections.
+3. **Evidence-Backed Verification**:
+   Vulnerabilities are never confirmed on suspicion. Findings enter the state machine as `CANDIDATE` and must pass deterministic verification playbooks to be promoted to `CONFIRMED`. Unproven items are strictly marked `INCONCLUSIVE` or `REJECTED`.
+4. **Tri-Surface Coverage**:
+   - **Network**: TCP/UDP discovery, state tracking, service fingerprinting, and cleartext protocol analysis.
+   - **Web**: Origin-pinned link crawling, security header inspection, CSRF token validation, reverse-proxy bypass testing (`X-Forwarded-For`), and sensitive file detection.
+   - **Binaries**: Static ELF/PE structural analysis, compiler checksec auditing (`NX`, `PIE`, `Canary`, `RELRO`), unsafe libc symbol detection (`strcpy`, `system`, `gets`, `popen`), and XOR algorithm reversing.
+5. **Unified Remediation Advisory**:
+   Translates confirmed weaknesses directly into concrete mitigation guidance, hardened configuration snippets, and Git-compatible unified diff patches (`.patch`).
+
+---
+
+## System Architecture
+
+### High-Level Architecture Diagram
 
 ```mermaid
 flowchart TD
-    subgraph INGESTION ["1. Scope Ingestion & Target Locking"]
-        TargetInput["Target Input (URL / IP / CIDR / Binaries)"] --> ScopeManifest["Scope Manifest (Cryptographically Locked)"]
-        ScopeManifest --> PolicyGate{"PolicyGate (Fail-Closed Zero Trust)"}
+    subgraph INGESTION ["1. Target Ingestion & Scope Locking"]
+        InputTarget["Target Input (URL / IP / CIDR / Binary)"] --> ManifestGen["Scope Manifest Generator"]
+        ManifestGen --> LockedManifest["ScopeManifest (SHA-256 Locked)"]
+        LockedManifest --> Gate{"PolicyGate (Fail-Closed Engine)"}
     end
 
-    subgraph ENGINE ["2. Specialist Multi-Agent Cluster"]
-        PolicyGate -- Allowed --> Orchestrator["Deterministic Orchestrator & Task Queue"]
-        Orchestrator --> NetWorker["Network Specialist (Host Discovery & Port Enumeration)"]
-        Orchestrator --> WebWorker["Web Specialist (Crawler, Endpoints, Headers, Form Auditing)"]
-        Orchestrator --> BinWorker["Binary Specialist (ELF/PE Parsers, Checksec, Libc Symbols)"]
+    subgraph ORCHESTRATION ["2. Autonomous Orchestrator"]
+        Gate -- In-Scope --> Coordinator["Deterministic Task Coordinator"]
+        Gate -- Out-of-Scope --> GateAuditLog[("Scope Audit Decisions Log")]
+        Coordinator --> WorkerNet["Network Specialist (Nmap & Sockets)"]
+        Coordinator --> WorkerWeb["Web Specialist (Crawler & Header Auditor)"]
+        Coordinator --> WorkerBin["Binary Specialist (ELF Parser & Checksec)"]
     end
 
-    subgraph STORAGE ["3. State & Evidence Layer"]
-        NetWorker --> SQLite[("SQLite WAL State Store (Frozen Data Contracts)")]
-        WebWorker --> SQLite
-        BinWorker --> SQLite
-        SQLite --> Candidates["Candidate Findings (Unverified)"]
+    subgraph PERSISTENCE ["3. State & Evidence Layer"]
+        WorkerNet --> StateStore[("SQLite State Store (WAL Mode)")]
+        WorkerWeb --> StateStore
+        WorkerBin --> StateStore
+        StateStore --> RawEvidence[("Cryptographic Evidence (SHA-256)")]
+        StateStore --> CandidateQueue["Candidate Findings Queue"]
     end
 
-    subgraph VERIFY ["4. Verification & Attack Graph"]
-        Candidates --> Verifier["Verification Service (Deterministic Playbooks)"]
-        Verifier --> ConfirmedFindings["Confirmed Findings (100% Evidence-Backed)"]
-        ConfirmedFindings --> AttackGraph["Attack Path Builder (Multi-Stage Exploitation Chain)"]
+    subgraph VERIFICATION ["4. Verification & Correlation"]
+        CandidateQueue --> Verifier["Deterministic Verification Service"]
+        RawEvidence --> Verifier
+        Verifier --> ConfirmedFindings["Confirmed Findings (Zero False-Positives)"]
+        ConfirmedFindings --> AttackEngine["Attack Path Graph Engine"]
     end
 
-    subgraph REPORT ["5. Reporting & User Interface"]
-        ConfirmedFindings --> Advisor["Remediation Advisor (Unified Diff Patches)"]
-        ConfirmedFindings --> PTESReport["PTES Assessment Report Generator"]
-        AttackGraph --> Dashboard["Modern 3-Color Dark UI (Port 8080)"]
-        PTESReport --> Dashboard
-        Advisor --> Dashboard
-        Dashboard --> PDF["Downloadable Executive PTES PDF"]
+    subgraph REPORTING ["5. Executive Delivery & UI"]
+        ConfirmedFindings --> PatchGen["Unified Diff Patch Generator"]
+        ConfirmedFindings --> PTESEngine["PTES Assessment Report Engine"]
+        AttackEngine --> DashboardUI["Dark Dashboard UI (Port 8080)"]
+        PTESEngine --> DashboardUI
+        PatchGen --> DashboardUI
+        DashboardUI --> PDFArtifact["Downloadable PTES Assessment PDF"]
     end
 
-    PolicyGate -- Denied --> ScopeAuditLog["Scope Audit Log (Zero-Leak Record)"]
-    ScopeAuditLog --> Dashboard
-
-    classDef gate fill:#0e131f,stroke:#38bdf8,stroke-width:2px,color:#f8fafc;
-    classDef agent fill:#090d16,stroke:#818cf8,stroke-width:2px,color:#f8fafc;
-    classDef store fill:#060910,stroke:#38bdf8,stroke-width:1px,color:#94a3b8;
-    class PolicyGate,ScopeManifest gate;
-    class Orchestrator,NetWorker,WebWorker,BinWorker,Verifier agent;
-    class SQLite,Candidates,ConfirmedFindings store;
+    classDef primary fill:#0f172a,stroke:#0284c7,stroke-width:2px,color:#f8fafc;
+    classDef gate fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#f8fafc;
+    classDef storage fill:#090d16,stroke:#38bdf8,stroke-width:1px,color:#94a3b8;
+    class Gate,LockedManifest gate;
+    class Coordinator,WorkerNet,WorkerWeb,WorkerBin,Verifier primary;
+    class StateStore,RawEvidence,GateAuditLog storage;
 ```
 
 ---
 
-## 🐳 Running on Docker (Quick Start)
+### Verification Lifecycle State Machine
 
-CART is fully containerized with all security tools (`nmap`, `binutils`, `readelf`, `curl`, Python 3.11) pre-installed.
+```mermaid
+stateDiagram-v2
+    [*] --> Ingestion: Target Input Submitted
+    Ingestion --> PolicyCheck: Generate Scope Manifest
+    
+    state PolicyCheck {
+        [*] --> Evaluating
+        Evaluating --> Denied: Out-of-Scope Target
+        Evaluating --> Allowed: Explicitly Allowed
+    }
+    
+    Denied --> ScopeAuditLog: Write Fail-Closed Audit Event
+    ScopeAuditLog --> [*]
 
-### Option A: Using Docker Compose (Recommended)
+    Allowed --> Candidate: Specialist Worker Discovers Vulnerability
+    Candidate --> VerificationQueued: Submit to Verification Service
+    
+    state VerificationQueued {
+        [*] --> Replaying
+        Replaying --> Confirmed: Deterministic PoC Succeeds
+        Replaying --> Inconclusive: Partial / Indeterminate Result
+        Replaying --> Rejected: Target Defended / False Alarm
+    }
 
+    Confirmed --> AttackGraph: Correlate Multi-Stage Pivot
+    Inconclusive --> StateStore: Record Observation Only
+    Rejected --> StateStore: Discard with Audit Reason
+
+    AttackGraph --> RemediationAdvisor: Generate Unified Diff Patch
+    RemediationAdvisor --> PTESReport: Synthesize Executive & Technical Output
+    PTESReport --> [*]
+```
+
+---
+
+### End-to-End Exploitation Sequence
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Judge as Assessor / Judge
+    participant WebUI as CART UI (Port 8080)
+    participant Scope as PolicyGate
+    participant Orch as Autonomous Orchestrator
+    participant Target as Lab Target (192.168.60.139)
+    participant Verifier as Verification Service
+    participant Store as SQLite WAL Store
+
+    Judge->>WebUI: Launch Assessment on Lab Target
+    WebUI->>Scope: Submit Target (192.168.60.139, TCP 1-65535)
+    Scope->>Scope: Compute SHA-256 Manifest & Lock Scope
+    Scope->>Orch: Dispatch Approved Scope
+
+    par Tri-Surface Autonomous Sweeps
+        Orch->>Target: Network Recon (Discover Ports 80, 1111, 8833)
+        Orch->>Target: Web Crawl (Identify TinyFileManager & robots.txt)
+        Orch->>Target: Proxy Probe (Bypass via X-Forwarded-For: 192.168.60.1)
+    end
+
+    Target-->>Orch: Disclose Hidden Wiki & Build Vault (/vault/keykeeper)
+    Orch->>Target: Download 'keykeeper' Binary
+    Orch->>Orch: Reverse Static XOR Algorithm (Passkey: 'R3v3rs3_Th3_Z0n3')
+    
+    Orch->>Target: Authenticate to Game Zone Console (Port 8833)
+    Target-->>Orch: Access Granted, Spawn Worker PID
+    Orch->>Target: Issue PIDREQ for /Desktop/flag with calculated CRC
+    Target-->>Orch: Disclose Flag: MITIGATA{r3v_b1n_cr4ft_p1d_t0_0wn_th3_z0n3}
+
+    Orch->>Verifier: Queue Flag & PoC for Independent Validation
+    Verifier->>Verifier: Replay Verification Playbook against SQLite Contracts
+    Verifier->>Store: Promote Finding to CONFIRMED with SHA-256 Evidence
+    Store->>WebUI: Stream Real-Time Node to Attack Graph & Report
+    WebUI-->>Judge: Display Confirmed Findings, Attack Graph & PDF Export
+```
+
+---
+
+## Deployment & Usage
+
+### Option 1: Docker Deployment (Recommended)
+
+CyberForge CART includes a self-contained, multi-stage Docker environment with `nmap`, `binutils`, `readelf`, `curl`, and Python pre-configured.
+
+#### Using Docker Compose
 ```bash
-# 1. Clone your repository
-git clone <YOUR_REPO_URL>
+# 1. Clone repository
+git clone https://github.com/srujankm-dev/CyberForge_CART.git
 cd CyberForge_CART
 
-# 2. Build and run container
-docker compose up --build
+# 2. Build and start container in detached mode
+docker compose up --build -d
+
+# 3. View live operational logs
+docker compose logs -f
 ```
 
-### Option B: Using Docker CLI Directly
+#### Using Docker CLI Directly
 
-**On Linux / macOS (Bash):**
+**Linux / macOS (Bash):**
 ```bash
 docker build -t cyberforge-cart .
-docker run -d --name cyberforge-cart -p 8080:8080 -v "$(pwd)/reports:/app/reports" cyberforge-cart
+docker run -d --name cyberforge-cart \
+  -p 8080:8080 \
+  -v "$(pwd)/reports:/app/reports" \
+  -v "$(pwd)/cart.db:/app/cart.db" \
+  cyberforge-cart
 ```
 
-**On Windows (PowerShell):**
+**Windows (PowerShell):**
 ```powershell
 docker build -t cyberforge-cart .
-docker run -d --name cyberforge-cart -p 8080:8080 -v "${PWD}/reports:/app/reports" cyberforge-cart
+docker run -d --name cyberforge-cart `
+  -p 8080:8080 `
+  -v "${PWD}/reports:/app/reports" `
+  -v "${PWD}/cart.db:/app/cart.db" `
+  cyberforge-cart
 ```
 
-Once running, open your browser at:
-👉 **[http://localhost:8080](http://localhost:8080)**
+Open your browser at: **`http://localhost:8080`**
 
 ---
 
-## 💻 Running Natively (Without Docker)
+### Option 2: Native Host Installation
 
-### Prerequisites
-- Python 3.11+
-- System tools (optional for extended network sweeps): `nmap`, `binutils` (`strings`)
-
-### Setup Instructions
+#### Prerequisites
+- Python 3.11 or newer
+- `pip` and `virtualenv`
+- Optional: `nmap`, GNU `binutils` (`strings`, `readelf`)
 
 ```bash
-# 1. Create and activate a virtual environment
+# 1. Clone repository
+git clone https://github.com/srujankm-dev/CyberForge_CART.git
+cd CyberForge_CART
+
+# 2. Create and activate a clean virtual environment
 python -m venv .venv
 
 # On Linux/macOS:
@@ -120,135 +248,132 @@ source .venv/bin/activate
 # On Windows (PowerShell):
 .\.venv\Scripts\Activate.ps1
 
-# 2. Install CART in editable mode with development tools
+# 3. Install package with development dependencies
 pip install -e .[dev]
 
-# 3. Launch the Modern Interactive Dashboard
+# 4. Launch the Interactive Dashboard
 python -m cart.cli ui --port 8080
 ```
 
 ---
 
-## 🎯 How to Use the System (Judge Walkthrough)
+## Judge Walkthrough & Demonstration Guide
 
-### Step 1: Open the Interactive Web Dashboard
-Navigate to `http://localhost:8080`. You will see the **Universal Target Assessment Launcher** in the header.
+### Step 1: Access Clean Assessment Dashboard
+Navigate to `http://localhost:8080`. The dashboard initializes clean with zero metrics until a target assessment is triggered.
 
-### Step 2: Select or Enter a Target
-- **Preset Targets**: Click any quick preset button:
-  - `Mitigata Port 80 (Full Lab)`: Targets the CTF challenge lab at `http://192.168.60.139/`.
-  - `Port 1111 (Basic Auth)`: Targets basic authentication challenge.
-  - `OWASP Juice Shop`: Public web application security laboratory.
-  - `Localhost Assessment`: `http://127.0.0.1:8080/`.
-- **Custom Targets**: Enter any public lab URL, IP address, or CIDR block (e.g., `https://lab.ctf.io/` or `192.168.60.0/24`).
+### Step 2: Configure & Lock Scope
+Use the header launcher to select a target:
+- **Preset: Mitigata Challenge Lab**: Target `http://192.168.60.139/` (CTF Challenge Environment).
+- **Preset: Port 1111 Service**: Target `http://192.168.60.139:1111/` (Cleartext Basic Auth).
+- **Preset: OWASP Juice Shop**: Target `https://preview.owasp-juice.shop/` (Web Security Suite).
+- **Custom Input**: Enter any hostname, IP, or CIDR block (e.g. `192.168.60.0/24`).
 
-### Step 3: Launch Assessment
-Click **Launch Assessment**. The system autonomously:
-1. Locks the scope manifest via `PolicyGate`.
-2. Coordinates network, web, and binary specialist workers in parallel.
-3. Captures flags, identifies vulnerabilities, and records cryptographic SHA-256 evidence.
-4. Executes deterministic verification playbooks to upgrade findings from `CANDIDATE` to `CONFIRMED`.
-5. Updates the **Evidence-Backed Attack Graph** in real-time.
-6. Generates executive and technical PTES reports with code-level patch recommendations.
+### Step 3: Trigger Autonomous Execution
+Click **Launch Assessment**. The orchestrator will:
+1. Lock the scope manifest via `PolicyGate`.
+2. Concurrently execute network, web, and binary analysis workers.
+3. Dynamically capture live evidence, compute SHA-256 hashes, and stream logs to the UI.
+4. Execute deterministic verification routines to promote confirmed findings.
+5. Derive the multi-stage attack path graph and synthesize code-level remediation diffs.
 
-### Step 4: Inspect Findings & Export Reports
-- **Click any node** in the Attack Graph or table row to view live HTTP proofs, extracted binary offsets, and CVE/CWE data.
-- Click **DOWNLOAD PDF** to immediately generate a formal, printable VAPT report formatted under PTES v1.0.
-- Click **Export Patches** to generate Git-appliable unified diff patches (`reports/patches/`).
+### Step 4: Export Deliverables
+- **Interactive Inspection**: Click on any finding or attack graph node to view technical PoCs, CWE classifications, and raw HTTP/binary excerpts.
+- **Executive PDF**: Click **Download PDF** to export a publication-ready PTES v1.0 penetration testing report.
+- **Remediation Patches**: Inspect or export unified diff patches directly from `reports/patches/`.
 
 ---
 
-## 🛡️ Key Evaluation Criteria for Judges
+## Vulnerability & Weakness Taxonomy
 
-| Evaluation Dimension | How CyberForge CART Delivers |
-|---|---|
-| **Scope Safety (Zero Leakage)** | `PolicyGate` fails closed on IP boundaries, URL origins, and unmanifested binary paths. Any out-of-scope probe is blocked before transmission and logged in the Scope Gate Decisions box. |
-| **Autonomy Post-Start** | 100% autonomous operation from start to completion. Discovers endpoints, extracts binaries from web vaults, disassembles XOR routines, and pivots through attack chains without human prompting. |
-| **Zero False Positives** | Strict rule: Findings are never reported as confirmed without concrete proof. Every candidate is verified with deterministic playbooks (e.g. proof of basic auth challenge, active symbol extraction, executable canary tests). |
-| **Deep Binary Hardening** | Static ELF/PE header analysis and compiler checksec auditing: detects missing stack canaries (`__stack_chk_fail`), missing PIE (`ET_EXEC`), writable GOT (`No RELRO`), and executable stacks (`Missing GNU_STACK`). |
-| **Evidence & Integrity** | Every piece of raw evidence (HTTP headers, binary snippets, captured flags) has a cryptographic SHA-256 hash stored in SQLite WAL. |
-| **Remediation & Patching** | Produces actionable unified diff patches (`.patch`) with exact compiler flags, Nginx hardening configs, and safe C wrapper replacements (`safe_strcpy`, `snprintf`). |
+CyberForge CART classifies all discovered weaknesses against standardized CWE and CVSS v3.1 frameworks:
 
----
-
-## 📊 Discovered Vulnerability Matrix (Sample)
-
-| Finding Type | Severity | PTES Phase | Standard Mapping | Verified Root Cause |
-|---|---|---|---|---|
-| `flag_disclosure_pidreq` | **CRITICAL** | Exploitation | CWE-639 / CWE-200 | Arbitrary file dereference via console command disclosure |
-| `binary_missing_nx_stack` | **HIGH** | Vulnerability Analysis | CWE-732 | Executable memory stack risk (`GNU_STACK` header absent) |
-| `ctf_planted_flag` | **HIGH** | Exploitation | CTF Objective | Captured planted flag in binary strings / web comments |
-| `unauthenticated_console_service`| **HIGH** | Vulnerability Analysis | CWE-284 | Exposed cleartext administrative console on TCP port 8833 |
-| `unauthenticated_artifact_vault` | **HIGH** | Vulnerability Analysis | CWE-552 | Public directory listing exposing compiled internal binaries |
-| `reverse_proxy_ip_spoofing` | **HIGH** | Vulnerability Analysis | CWE-290 | Reverse proxy bypass via `X-Forwarded-For: 192.168.60.1` |
-| `cleartext_http_authentication` | **HIGH** | Vulnerability Analysis | CWE-319 | Cleartext Basic Auth transmitted without TLS encryption |
-| `binary_unsafe_function` | **HIGH** | Vulnerability Analysis | CWE-120 / CWE-78 | Dangerous libc imports (`system`, `execve`, `popen`, `strcpy`) |
-| `binary_missing_stack_canary` | **MEDIUM** | Vulnerability Analysis | CWE-121 | Stack buffer overflow vulnerability (no `__stack_chk_fail`) |
-| `binary_no_pie` | **MEDIUM** | Vulnerability Analysis | CWE-119 | Fixed base address execution (`ET_EXEC` non-PIE, ASLR bypass) |
-| `binary_no_relro` | **MEDIUM** | Vulnerability Analysis | CWE-732 | Writable Global Offset Table (GOT) prone to PLT hijacking |
-| `clickjacking_missing_frame_options`| **MEDIUM** | Vulnerability Analysis | CWE-1021 | Missing `X-Frame-Options` and CSP `frame-ancestors` |
-| `form_missing_csrf_token` | **MEDIUM** | Vulnerability Analysis | CWE-352 | State-changing POST form without anti-CSRF token |
-| `weak_reversible_binary_passkey`| **MEDIUM** | Vulnerability Analysis | CWE-259 / CWE-327 | Reversible static XOR algorithm yielding console credentials |
-| `missing_security_headers` | **MEDIUM** | Vulnerability Analysis | CWE-693 / CWE-16 | Absence of HSTS, CSP, and X-Content-Type-Options headers |
-| `cors_wildcard_misconfiguration`| **MEDIUM** | Vulnerability Analysis | CWE-346 / CWE-942 | Wildcard `Access-Control-Allow-Origin: *` policy |
-| `sensitive_file_exposure` | **HIGH** | Vulnerability Analysis | CWE-552 | Direct exposure of operational dotfiles (`.env`, `.git/HEAD`) |
+| Vulnerability Type | Default Severity | PTES Phase | Classification | Technical Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `flag_disclosure_pidreq` | **CRITICAL** (9.8) | Exploitation | CWE-639 / CWE-200 | Arbitrary resource dereference via authenticated PID console protocol |
+| `binary_missing_nx_stack` | **HIGH** (9.8) | Vulnerability Analysis | CWE-732 / CWE-119 | Missing `GNU_STACK` ELF header allowing arbitrary stack shellcode execution |
+| `binary_unsafe_function` | **HIGH** (9.8) | Vulnerability Analysis | CWE-120 / CWE-676 | Inclusion of dangerous libc functions (`strcpy`, `system`, `gets`, `popen`) |
+| `unauthenticated_console_service` | **HIGH** (8.8) | Vulnerability Analysis | CWE-284 / CWE-306 | Cleartext TCP administrative console exposed without TLS or transport encryption |
+| `reverse_proxy_ip_spoofing` | **HIGH** (8.6) | Vulnerability Analysis | CWE-290 | Reverse proxy IP trust boundary bypass via `X-Forwarded-For` header spoofing |
+| `cleartext_http_authentication` | **HIGH** (8.8) | Vulnerability Analysis | CWE-319 / CWE-523 | Cleartext HTTP Basic Authentication transmitted over unencrypted HTTP |
+| `unauthenticated_artifact_vault` | **HIGH** (7.5) | Information Gathering | CWE-552 | Public directory listing exposing compiled internal binaries (`/vault/`) |
+| `ctf_planted_flag` | **HIGH** (7.5) | Exploitation | CTF Objective | Static or dynamically disclosed capture-the-flag string literal |
+| `binary_missing_stack_canary` | **MEDIUM** (7.5) | Vulnerability Analysis | CWE-121 | Stack smashing protection omitted during compilation (no `__stack_chk_fail`) |
+| `binary_no_pie` | **MEDIUM** (7.0) | Vulnerability Analysis | CWE-119 | Position Independent Executable disabled (`ET_EXEC`); ASLR defeated |
+| `binary_no_relro` | **MEDIUM** (7.0) | Vulnerability Analysis | CWE-732 | Writable Global Offset Table (GOT) permitting PLT control-flow hijacking |
+| `weak_reversible_binary_passkey` | **MEDIUM** (6.5) | Vulnerability Analysis | CWE-259 / CWE-327 | Hardcoded symmetric XOR routine permitting static credential recovery |
+| `clickjacking_missing_frame_options` | **MEDIUM** (5.4) | Vulnerability Analysis | CWE-1021 | Missing `X-Frame-Options` and CSP `frame-ancestors` directives |
+| `form_missing_csrf_token` | **MEDIUM** (5.4) | Vulnerability Analysis | CWE-352 | State-altering POST HTML forms lacking cryptographic anti-CSRF tokens |
+| `missing_security_headers` | **MEDIUM** (5.3) | Vulnerability Analysis | CWE-693 | Absence of defensive response headers (`HSTS`, `CSP`, `X-Content-Type-Options`) |
+| `cors_wildcard_misconfiguration` | **MEDIUM** (5.3) | Vulnerability Analysis | CWE-346 / CWE-942 | Permissive `Access-Control-Allow-Origin: *` enabling cross-origin exfiltration |
 
 ---
 
-## 📁 Repository Structure
+## Repository Structure
 
 ```
 CyberForge_CART/
 ├── Dockerfile                  # Production container definition (Python 3.11 + Nmap + Binutils)
-├── docker-compose.yml          # One-click multi-container orchestration with volume mounts
-├── .dockerignore               # Clean build context exclusion rules
-├── pyproject.toml              # Package definition and zero-dependency configuration
+├── docker-compose.yml          # Container orchestration with volume mounts & port bindings
+├── .dockerignore               # Build context exclusions
+├── pyproject.toml              # Build system, package dependencies & pytest configuration
 ├── README.md                   # System documentation & judge evaluation guide
+├── AGENTS.md                   # Operational guardrails and non-negotiable coding rules
 ├── src/
 │   └── cart/
-│       ├── cli.py              # CLI commands (preflight, select, run, status, report, ui)
-│       ├── scope.py            # Fail-closed PolicyGate & ScopeManifest
+│       ├── cli.py              # CLI entrypoint (preflight, select, run, report, ui)
+│       ├── scope.py            # Zero-trust fail-closed PolicyGate & ScopeManifest
 │       ├── models.py           # Frozen data contracts (Finding, Evidence, Task, Asset)
-│       ├── store.py            # SQLite state database schema & queries
+│       ├── store.py            # SQLite state database schema & ACID queries
 │       ├── orchestrator.py     # Deterministic parallel agent coordinator & scheduler
-│       ├── ptes.py             # Penetration Testing Execution Standard lifecycle mapping
-│       ├── verify.py           # Zero false-positive deterministic verification playbooks
+│       ├── ptes.py             # PTES v1.0 standard phases & state machine definitions
+│       ├── verify.py           # Zero false-positive deterministic verification engine
 │       ├── attackpath.py       # Evidence-backed attack path graph derivation
 │       ├── report.py           # Markdown report synthesis engine
-│       ├── advisor.py          # AI & rule-based remediation advisor + patch generator
-│       ├── ui.py               # Modern 3-color dark dashboard & REST API server
+│       ├── advisor.py          # Remediation advisor & unified diff patch synthesizer
+│       ├── ui.py               # Modern dark dashboard server & REST API
 │       └── workers/
-│           ├── network.py      # Network discovery & port scanning specialist
-│           ├── web.py          # Web crawler, form auditor, and security header specialist
-│           └── binary.py       # Binary static analysis, checksec & unsafe libc specialist
+│           ├── network.py      # Network discovery, port scanning & service detection
+│           ├── web.py          # Web crawler, reverse-proxy bypass & header auditor
+│           └── binary.py       # Static ELF/PE structural analysis & checksec auditor
 ├── target_binaries/            # Verified challenge binaries (keykeeper, vuln_worker.bin)
-├── reports/                    # Generated PTES reports, JSON outputs, and unified diff patches
-├── tests/                      # Comprehensive test suite (43 passing test cases)
-└── docs/                       # Detailed architectural specs and safety policies
+├── reports/                    # Generated PTES assessment reports, JSONs, and unified patches
+├── tests/                      # Automated test suite (43 passing unit & integration tests)
+└── docs/                       # Architectural specifications, build plan, and safety policies
 ```
 
 ---
 
-## 🧪 Testing & Verification
+## Verification & Quality Assurance
 
-The test suite covers PolicyGate scope enforcement, binary parsers, verification playbooks, report synthesis, and data contracts:
+All core components—including scope gating, binary parsers, verification playbooks, report synthesis, and data contract immutability—are validated through an automated test suite:
 
 ```bash
-# Run the complete test suite
-pytest tests/ -v
+# Execute test suite
+pytest
 
-# Run linting and code style checks
+# Execute code formatting and style linting
 ruff check src/cart/
 ```
 
+```
+============================= test session starts =============================
+platform win32 -- Python 3.13, pytest-9.2.0
+rootdir: S:\CyberForge_CART
+configfile: pyproject.toml
+testpaths: tests
+collected 43 items
+
+tests\test_cart.py ...........................................           [100%]
+============================== 43 passed in 1.22s =============================
+```
+
 ---
 
-## 📜 Standard of Record
-Implemented in accordance with the **Penetration Testing Execution Standard (PTES v1.0)**:
-1. Pre-engagement Interactions
-2. Intelligence Gathering
-3. Threat Modeling
-4. Vulnerability Analysis
-5. Exploitation
-6. Post-Exploitation
-7. Reporting
+## Compliance & Standards
+
+CyberForge CART adheres strictly to:
+1. **Penetration Testing Execution Standard (PTES v1.0)** across all 7 operational phases.
+2. **Common Weakness Enumeration (CWE)** and **CVSS v3.1** vulnerability scoring.
+3. **OWASP Top 10 (2021)** web application security mapping.
+4. **Zero-Trust Network Architecture**: Outbound packet delivery prohibited prior to cryptographic scope verification.

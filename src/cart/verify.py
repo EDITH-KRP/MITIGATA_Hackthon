@@ -323,18 +323,18 @@ def _playbook_unauthenticated_artifact_vault_exposure(
     finding: dict, evidence_list: list[dict]
 ) -> tuple[FindingStatus, str, str]:
     for ev in evidence_list:
-        excerpt = ev.get("excerpt", "")
-        if "vault" in excerpt.lower() or "keykeeper" in excerpt.lower():
-            return FindingStatus.CONFIRMED, "high", "Unauthenticated build artifact vault exposure confirmed"
-    return FindingStatus.CANDIDATE, "medium", "Artifact vault exposure unconfirmed"
+        excerpt = ev.get("excerpt", "").lower()
+        if any(k in excerpt for k in ("index of /vault", "index of /artifacts", "index of /builds", "artifact vault")):
+            return FindingStatus.CONFIRMED, "high", "Unauthenticated build artifact repository exposure confirmed"
+    return FindingStatus.CANDIDATE, "medium", "Artifact repository exposure unconfirmed"
 
 
 def _playbook_weak_reversible_binary_passkey(
     finding: dict, evidence_list: list[dict]
 ) -> tuple[FindingStatus, str, str]:
     for ev in evidence_list:
-        excerpt = ev.get("excerpt", "")
-        if "R3v3rs3" in excerpt or "passkey" in excerpt.lower() or "xor" in excerpt.lower():
+        excerpt = ev.get("excerpt", "").lower()
+        if any(k in excerpt for k in ("passkey", "xor key", "hardcoded key", "xor table", "decompiled credential")):
             return FindingStatus.CONFIRMED, "high", "Reversible binary passkey algorithm confirmed in disassembly"
     return FindingStatus.CANDIDATE, "medium", "Passkey algorithm unconfirmed"
 
@@ -343,9 +343,9 @@ def _playbook_unauthenticated_console_service(
     finding: dict, evidence_list: list[dict]
 ) -> tuple[FindingStatus, str, str]:
     for ev in evidence_list:
-        excerpt = ev.get("excerpt", "")
-        if "GAME ZONE" in excerpt.upper() or "8833" in excerpt or "zone>" in excerpt:
-            return FindingStatus.CONFIRMED, "high", "Cleartext administrative console service banner confirmed on port 8833"
+        excerpt = ev.get("excerpt", "").lower()
+        if any(k in excerpt for k in ("welcome to the game zone", "console", "admin shell", "terminal service")):
+            return FindingStatus.CONFIRMED, "high", "Cleartext administrative console service exposure confirmed"
     return FindingStatus.CANDIDATE, "medium", "Console service unconfirmed"
 
 
@@ -354,9 +354,9 @@ def _playbook_flag_disclosure_pidreq(
 ) -> tuple[FindingStatus, str, str]:
     for ev in evidence_list:
         excerpt = ev.get("excerpt", "")
-        if "FLAG:" in excerpt or "MITIGATA{" in excerpt or "PIDREQ" in excerpt:
-            return FindingStatus.CONFIRMED, "high", "Arbitrary file reading and flag disclosure confirmed via PIDREQ"
-    return FindingStatus.CANDIDATE, "medium", "PIDREQ flag disclosure unconfirmed"
+        if re.search(r"(?:FLAG:\s*\S+|[a-zA-Z0-9_-]+\{[^\}]+\})", excerpt, re.IGNORECASE):
+            return FindingStatus.CONFIRMED, "high", "Arbitrary file reading and flag disclosure confirmed via protocol command"
+    return FindingStatus.CANDIDATE, "medium", "Arbitrary file reading flag disclosure unconfirmed"
 
 
 def _playbook_cors_wildcard_misconfiguration(

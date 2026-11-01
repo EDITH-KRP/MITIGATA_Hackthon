@@ -179,6 +179,38 @@ class PolicyGate:
             url,
         )
 
+    def get_pinned_ip(self, hostname: str) -> str | None:
+        """Return the validated, pinned IP address for a hostname if cached."""
+        ips = self._dns_pinning_cache.get(hostname)
+        if ips:
+            return ips[0]
+        return None
+
+    def resolve_and_pin_host(self, host: str, run_id: str | None = None) -> str:
+        """Validate a host/IP through policy and return the pinned IP.
+
+        If host is already an IP address, validates check_ip directly.
+        If host is a hostname, performs check_url or DNS resolution validation
+        and returns the pinned IP. Raises PermissionError if DENY.
+        """
+        try:
+            ipaddress.ip_address(host)
+            dec = self.check_ip(host)
+            if dec.decision is ScopeDecision.DENY:
+                raise PermissionError(f"Scope DENY for host {host}: {dec.reason}")
+            return host
+        except ValueError:
+            pass
+
+        url = f"http://{host}/"
+        dec = self.gate(url, run_id=run_id, is_url=True)
+        if dec.decision is ScopeDecision.DENY:
+            raise PermissionError(f"Scope DENY for host {host}: {dec.reason}")
+        pinned = self.get_pinned_ip(host)
+        if pinned:
+            return pinned
+        return host
+
     # ------------------------------------------------------------------
     # Binary file check
     # ------------------------------------------------------------------
@@ -289,10 +321,10 @@ def setup_scope_for_target(
     """Parse any universal target (URL, domain, IP, or CIDR) and lock a ScopeManifest in SQLite.
 
     Supports:
-    - HTTP/HTTPS URLs: 'http://192.168.60.139/', 'https://lab.ctf.io/app'
-    - Plain IP addresses: '192.168.60.139', '10.10.10.5'
-    - Host and port: '192.168.60.139:1111', 'target.local:8080'
-    - CIDR ranges: '192.168.60.0/24'
+    - HTTP/HTTPS URLs: 'https://example.com/app', 'http://10.0.10.25:8080/'
+    - Plain IP addresses: '10.0.10.25', '198.51.100.10'
+    - Host and port: '10.0.10.25:1111', 'target.local:8080'
+    - CIDR ranges: '10.0.10.0/24'
 
     Returns:
         tuple[ScopeManifest, str | None]: (locked_manifest, seed_url)
@@ -330,7 +362,7 @@ def setup_scope_for_target(
         ]
         included_hosts = list(resolved_ips)
 
-    # 2. CIDR network blocks (e.g. 192.168.60.0/24)
+    # 2. CIDR network blocks (e.g. 10.0.10.0/24)
     elif "/" in target and not target.startswith("/"):
         try:
             net = ipaddress.ip_network(target, strict=False)

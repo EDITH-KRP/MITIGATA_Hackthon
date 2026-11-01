@@ -459,10 +459,19 @@ _WEB_PORTS = {80, 443, 1111, 8000, 8080, 8443, 8888}
 class NetworkWorker:
     """In-scope live host / port / service discovery."""
 
-    def __init__(self, conn: sqlite3.Connection, gate: PolicyGate, run_id: str):
+    def __init__(
+        self,
+        conn: sqlite3.Connection,
+        gate: PolicyGate,
+        run_id: str,
+        all_ports: bool = False,
+        scan_udp: bool = False,
+    ):
         self.conn = conn
         self.gate = gate
         self.run_id = run_id
+        self.all_ports = all_ports
+        self.scan_udp = scan_udp
         self._nmap = _check_nmap()
 
     def _run_native_scan(
@@ -486,8 +495,8 @@ class NetworkWorker:
         )
         deadline = time.monotonic() + timeout_s
         custom_ports = task.budget.get("ports")
-        all_ports = task.budget.get("all_ports", False)
-        scan_udp = task.budget.get("scan_udp", True)
+        all_ports = task.budget.get("all_ports", self.all_ports)
+        scan_udp = task.budget.get("scan_udp", self.scan_udp)
         assets, services = _scan_native_sockets(
             task.target_id, self.gate, self.run_id, ports=custom_ports, all_ports=all_ports, scan_udp=scan_udp, deadline=deadline
         )
@@ -539,7 +548,7 @@ class NetworkWorker:
                     port_range = task.budget.get("port_range")
                     if port_range:
                         ports_arg = str(port_range)
-                    elif task.budget.get("all_ports", False):
+                    elif task.budget.get("all_ports", self.all_ports):
                         ports_arg = "1-65535"
                     elif task.budget.get("ports"):
                         ports_arg = ",".join(str(p) for p in task.budget["ports"])
@@ -568,7 +577,7 @@ class NetworkWorker:
 
                     udp_bytes = b""
                     # Separate, non-interfering UDP scan pass when requested
-                    if task.budget.get("scan_udp", False):
+                    if task.budget.get("scan_udp", self.scan_udp):
                         try:
                             udp_xml = Path(tmpdir) / "udp_scan.xml"
                             udp_ports = ",".join(str(p) for p in _COMMON_UDP_PORTS)

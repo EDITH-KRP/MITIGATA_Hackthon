@@ -1201,7 +1201,7 @@ function renderFindings(findings) {
     if (toolBadge.includes('nmap')) toolBadge = 'Nmap Specialist';
     else if (toolBadge.includes('binary')) toolBadge = 'Binary Specialist';
     else if (toolBadge.includes('web')) toolBadge = 'Web Specialist';
-    else if (toolBadge.includes('gamezone')) toolBadge = 'Console Probe';
+    else if (toolBadge.includes('console')) toolBadge = 'Console Specialist';
 
     tr.innerHTML = `
       <td style="font-family:monospace; color:#38bdf8; max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${f.target_url || 'N/A'}">${f.target_url || 'N/A'}</td>
@@ -2443,20 +2443,10 @@ class DashboardHandler(http.server.BaseHTTPRequestHandler):
 
             if atype == "binary":
                 bname = Path(key).name
-                if "keykeeper" in bname.lower():
-                    label = "keykeeper (Reversed Binary)"
-                    stage = "reversing"
-                elif "vuln_auth" in bname.lower():
-                    label = "vuln_auth_daemon (ELF Daemon)"
-                    stage = "exploitation"
-                else:
-                    label = f"{bname} (Binary)"
-                    stage = "binary"
+                label = f"{bname} (Analyzed Binary)"
+                stage = "binary"
             elif atype == "web_app":
-                if "mitigata" in key.lower() or "wiki" in key.lower():
-                    label = f"Mitigata Hidden Wiki ({key})"
-                else:
-                    label = f"Web Application ({key})"
+                label = f"Web Application ({key})"
                 stage = "web_app"
             else:
                 label = f"Target Host ({key})"
@@ -2486,9 +2476,10 @@ class DashboardHandler(http.server.BaseHTTPRequestHandler):
                     tech_label = {
                         "REVERSE_PROXY_IP_SPOOFING": "Reverse Proxy IP Spoofing (XFF Bypass)",
                         "ARTIFACT_VAULT_DOWNLOAD": "Artifact Exfiltration (/vault/)",
-                        "REVERSED_AUTH_PASSKEY": "Binary Reverse Engineering (XOR Decrypt)",
+                        "REVERSED_AUTH_PASSKEY": "Binary Reverse Engineering (Passkey Decrypt)",
                         "BINARY_DAEMON_PROBE": "Static Binary Daemon Audit",
                         "WEB_SERVICE_EXPOSURE": "Web Service Exposure",
+                        "COMMAND_FLAG_DISCLOSURE": "Arbitrary Command / Resource Disclosure",
                         "FLAG_DISCLOSURE_PIDREQ": "Arbitrary File Read Exploit",
                     }.get(e.relationship_type, e.relationship_type.replace("_", " ").title())
 

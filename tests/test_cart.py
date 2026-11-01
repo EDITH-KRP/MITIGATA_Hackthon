@@ -745,11 +745,11 @@ class TestUniversalTargetAndAttackGraph(unittest.TestCase):
 
     def test_setup_scope_for_target_url(self):
         from cart.scope import setup_scope_for_target
-        manifest, seed_url = setup_scope_for_target(self.conn, "http://192.168.60.139:1111/ops")
+        manifest, seed_url = setup_scope_for_target(self.conn, "http://10.0.10.25:1111/ops")
         self.assertIsNotNone(manifest.locked_at)
-        self.assertIn("192.168.60.139/32", manifest.included_prefixes)
-        self.assertIn("192.168.60.139", manifest.included_hosts)
-        self.assertEqual(seed_url, "http://192.168.60.139:1111/ops")
+        self.assertIn("10.0.10.25/32", manifest.included_prefixes)
+        self.assertIn("10.0.10.25", manifest.included_hosts)
+        self.assertEqual(seed_url, "http://10.0.10.25:1111/ops")
 
     def test_setup_scope_for_target_cidr(self):
         from cart.scope import setup_scope_for_target
@@ -829,6 +829,172 @@ class TestUniversalTargetAndAttackGraph(unittest.TestCase):
             self.assertTrue(adv["cwe_id"].startswith("CWE-"))
             self.assertIn("recommended_fix", adv)
             self.assertIn("patch_example", adv)
+
+
+class TestSecurityAndArchitectureRegressions(unittest.TestCase):
+    def setUp(self):
+        self.conn = connect(":memory:")
+
+    def tearDown(self):
+        self.conn.close()
+
+    def test_cidr_large_network_memory_safe(self):
+        manifest = ScopeManifest(
+            scope_version="large_cidr",
+            included_prefixes=["10.0.0.0/8"],
+            exclusions=["10.254.0.0/16"],
+            locked_at=utc_now(),
+        )
+        gate = PolicyGate(manifest)
+        # Check contained subnet
+        res = gate.check_destination("10.50.0.0/16")
+        self.assertEqual(res.decision, ScopeDecision.ALLOW)
+        # Check exclusion overlap fails closed
+        res_ex = gate.check_destination("10.254.10.0/24")
+        self.assertEqual(res_ex.decision, ScopeDecision.DENY)
+        # Check host
+        res_host = gate.check_destination("10.1.2.3")
+        self.assertEqual(res_host.decision, ScopeDecision.ALLOW)
+
+    def test_ipv6_url_prefix_setup(self):
+        from cart.scope import setup_scope_for_target
+        manifest, _seed = setup_scope_for_target(self.conn, "http://[2001:db8::1]:8080/path")
+        self.assertIn("2001:db8::1/128", manifest.included_prefixes)
+        self.assertNotIn("2001:db8::1/32", manifest.included_prefixes)
+        self.assertIn("2001:db8::1", manifest.included_hosts)
+
+    def test_dns_rebinding_rejected(self):
+        manifest = ScopeManifest(
+            scope_version="dns_test",
+            included_prefixes=["192.168.1.0/24"],
+            locked_at=utc_now(),
+        )
+        gate = PolicyGate(manifest)
+
+        # Initial benign resolution to in-scope IP
+        with patch("socket.getaddrinfo", return_value=[(None, None, None, None, ("192.168.1.10", 80))]):
+            res1 = gate.check_url("http://dynamic.attacker.lab/")
+            self.assertEqual(res1.decision, ScopeDecision.ALLOW)
+            self.assertEqual(gate.get_pinned_ip("dynamic.attacker.lab"), "192.168.1.10")
+
+        # Rebinding resolution changes IP
+        with patch("socket.getaddrinfo", return_value=[(None, None, None, None, ("10.0.0.99", 80))]):
+            res2 = gate.check_url("http://dynamic.attacker.lab/")
+            self.assertEqual(res2.decision, ScopeDecision.DENY)
+            self.assertIn("rebinding detected", res2.reason.lower())
+
+    def test_scope_guarded_redirect_enforcement(self):
+        import urllib.request
+
+        from cart.workers.web import ScopeGuardedRedirectHandler
+
+        manifest = ScopeManifest(
+            scope_version="redir_scope",
+            included_prefixes=["192.168.1.0/24"],
+            exclusions=["192.168.1.250/32"],
+            locked_at=utc_now(),
+        )
+        gate = PolicyGate(manifest)
+        handler = ScopeGuardedRedirectHandler(gate, "test_run")
+        req = urllib.request.Request("http://192.168.1.10/")
+
+        # In-scope redirect allowed
+        res_ok = handler.redirect_request(req, None, 302, "Found", {}, "http://192.168.1.20/dashboard")
+        self.assertIsNotNone(res_ok)
+
+        # Excluded redirect dropped (returns None)
+        res_blocked = handler.redirect_request(req, None, 302, "Found", {}, "http://192.168.1.250/secret")
+        self.assertIsNone(res_blocked)
+
+        # External redirect dropped
+        res_ext = handler.redirect_request(req, None, 302, "Found", {}, "http://8.8.8.8/evil")
+        self.assertIsNone(res_ext)
+
+    def test_report_metrics_evidence_based(self):
+        self.conn.execute("INSERT INTO scope_manifests (scope_version, included_prefixes, included_hosts, exclusions, binary_hashes, created_by, locked_at) VALUES ('s_rep', '[\"192.168.1.0/24\"]', '[]', '[]', '{}', 'test', '2026-01-01T00:00:00Z')")
+        self.conn.execute("INSERT INTO runs (run_id, status, tier, started_at, scope_version) VALUES ('run_rep', 'completed', 'deep', '2026-01-01T00:00:00Z', 's_rep')")
+        self.conn.execute("INSERT INTO assets (asset_id, run_id, asset_type, canonical_key, first_seen, last_seen) VALUES ('a_rep', 'run_rep', 'host', '192.168.1.10', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')")
+
+        # 2 criticals: 1 confirmed, 1 candidate (50% verification rate)
+        self.conn.execute("INSERT INTO findings (finding_id, asset_id, finding_type, severity, status) VALUES ('f_c1', 'a_rep', 'type1', 'critical', 'confirmed')")
+        self.conn.execute("INSERT INTO findings (finding_id, asset_id, finding_type, severity, status) VALUES ('f_c2', 'a_rep', 'type2', 'critical', 'candidate')")
+        # 1 medium: candidate (0% confirmed)
+        self.conn.execute("INSERT INTO findings (finding_id, asset_id, finding_type, severity, status) VALUES ('f_m1', 'a_rep', 'type3', 'medium', 'candidate')")
+        self.conn.commit()
+
+        rep = ReportGenerator(self.conn)
+        result = rep.generate("run_rep")
+        metrics = result["metrics"]
+        self.assertEqual(metrics["total_findings"], 3)
+        self.assertEqual(metrics["confirmed_findings"], 1)
+
+        md_content = Path(result["md_report"]).read_text(encoding="utf-8")
+        self.assertIn("50.0%", md_content)
+        self.assertIn("0.0%", md_content)
+
+    def test_orchestrator_run_isolation_and_idempotence(self):
+        orch_a = Orchestrator(self.conn, run_id="run_AAA", max_tasks=10, total_time_budget_s=60)
+        orch_b = Orchestrator(self.conn, run_id="run_BBB", max_tasks=10, total_time_budget_s=60)
+
+        task_a = Task(task_id="t_a1", task_type="scan", owner="network_worker", target_id="target1", dedupe_key="run_AAA:t1", status=TaskStatus.READY)
+        task_b = Task(task_id="t_b1", task_type="scan", owner="network_worker", target_id="target2", dedupe_key="run_BBB:t1", status=TaskStatus.READY)
+        orch_a.create_task(task_a)
+        orch_b.create_task(task_b)
+
+        ready_a = orch_a.ready_tasks()
+        ready_b = orch_b.ready_tasks()
+        self.assertEqual(len(ready_a), 1)
+        self.assertEqual(ready_a[0].task_id, "t_a1")
+        self.assertEqual(len(ready_b), 1)
+        self.assertEqual(ready_b[0].task_id, "t_b1")
+
+        # Test idempotency: transitioning succeeded -> succeeded should not throw
+        orch_a.transition("t_a1", TaskStatus.RUNNING)
+        orch_a.transition("t_a1", TaskStatus.SUCCEEDED)
+        # Repeated transition to same status should safely no-op
+        orch_a.transition("t_a1", TaskStatus.SUCCEEDED)
+
+        # Budget exhaustion on run_AAA should not cancel run_BBB
+        orch_a.on_run_budget_exhausted()
+        t_b_row = self.conn.execute("SELECT status FROM tasks WHERE task_id='t_b1'").fetchone()
+        self.assertEqual(t_b_row[0], TaskStatus.READY.value)
+
+    def test_verification_hardening_prevents_false_positives(self):
+        self.conn.execute("INSERT INTO scope_manifests (scope_version, included_prefixes, included_hosts, exclusions, binary_hashes, created_by, locked_at) VALUES ('s_hard', '[\"192.168.1.0/24\"]', '[]', '[]', '{}', 'test', '2026-01-01T00:00:00Z')")
+        self.conn.execute("INSERT INTO runs (run_id, status, tier, started_at, scope_version) VALUES ('r_hard', 'active', 'deep', '2026-01-01T00:00:00Z', 's_hard')")
+        self.conn.execute("INSERT INTO assets (asset_id, run_id, asset_type, canonical_key, first_seen, last_seen) VALUES ('a_hard', 'r_hard', 'web_app', 'test.app', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')")
+
+        # State-changing POST form without anti-CSRF token should return NEEDS_REVIEW, not CONFIRMED
+        fid = "f_form_unverified"
+        form_payload = json.dumps({
+            "action": "/api/transfer",
+            "method": "POST",
+            "inputs": [{"name": "recipient", "type": "text"}, {"name": "amount", "type": "number"}],
+        })
+        self.conn.execute(
+            "INSERT INTO findings (finding_id, asset_id, finding_type, severity, status, summary) VALUES (?, 'a_hard', 'web_form_endpoint', 'medium', 'candidate', 'Form test')",
+            (fid,),
+        )
+        self.conn.execute(
+            "INSERT INTO evidence (evidence_id, finding_id, source_tool, artifact_path, hash, timestamp, excerpt) VALUES ('ev_form', ?, 'web_crawler', 'http://test.app/api/transfer', 'h1', '2026-01-01T00:00:00Z', ?)",
+            (fid, form_payload),
+        )
+        svc = VerificationService(self.conn, "r_hard")
+        svc.queue([fid])
+        verdict = svc.verify_one(fid)
+        self.assertEqual(verdict, FindingStatus.NEEDS_REVIEW)
+
+    def test_network_worker_udp_and_all_ports_config(self):
+        from cart.workers.network import NetworkWorker
+        manifest = ScopeManifest(
+            scope_version="net_scope",
+            included_prefixes=["192.168.1.0/24"],
+            locked_at=utc_now(),
+        )
+        gate = PolicyGate(manifest)
+        worker = NetworkWorker(self.conn, gate, "run_net", all_ports=True, scan_udp=True)
+        self.assertTrue(worker.all_ports)
+        self.assertTrue(worker.scan_udp)
 
 
 if __name__ == "__main__":

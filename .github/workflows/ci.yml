@@ -36,3 +36,4 @@ jobs:
       - name: Execute Pytest Suite
         run: |
           pytest -v
+

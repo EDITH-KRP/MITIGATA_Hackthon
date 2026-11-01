@@ -103,7 +103,7 @@ _PATCH_EXAMPLES: dict[str, dict[str, str]] = {
             "```bash\n"
             "# Restrict access with UFW firewall\n"
             "sudo ufw default deny incoming\n"
-            "sudo ufw allow from 192.168.60.0/24 to any port 80 proto tcp\n"
+            "sudo ufw allow from 10.0.0.0/24 to any port 80 proto tcp\n"
             "```"
         ),
     },
@@ -479,15 +479,15 @@ _PATCH_EXAMPLES: dict[str, dict[str, str]] = {
         "cvss_score": "9.1",
         "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N",
         "threat_vector": "Remote Unauthenticated Reverse Proxy Header Injection",
-        "reproduction_command": "curl -H 'X-Forwarded-For: 192.168.60.1' http://{target}/",
-        "verification_test": "curl -i -H 'X-Forwarded-For: 192.168.60.1' http://{target}/ | grep '403 Forbidden'",
+        "reproduction_command": "curl -H 'X-Forwarded-For: 10.0.0.1' http://{target}/",
+        "verification_test": "curl -i -H 'X-Forwarded-For: 10.0.0.1' http://{target}/ | grep '403 Forbidden'",
 
         "title": "Reverse Proxy Access Control Bypass via IP Header Spoofing",
         "plain_english_summary": (
             "The front-end proxy trusts client-supplied headers such as 'X-Forwarded-For' "
-            "to enforce internal IP restrictions. By injecting 'X-Forwarded-For: 192.168.60.1', "
+            "to enforce internal IP restrictions. By injecting 'X-Forwarded-For: 10.0.0.1', "
             "an untrusted remote attacker completely bypasses the boundary gate and gains "
-            "unauthorized access to internal resources (e.g., Hidden Wiki) (CWE-290)."
+            "unauthorized access to internal resources (e.g., Internal Portal) (CWE-290)."
         ),
         "impact": (
             "Full authentication bypass of corporate segment assets and unrestricted access "
@@ -521,7 +521,7 @@ _PATCH_EXAMPLES: dict[str, dict[str, str]] = {
         "title": "Unauthenticated Directory Indexing on Build Artifact Vault",
         "plain_english_summary": (
             "The web server exposes an internal directory listing at /vault/ containing "
-            "compiled binary artifacts (e.g., keykeeper). Attackers can directly download "
+            "compiled binary artifacts (e.g., daemon.elf). Attackers can directly download "
             "proprietary software, analyze binaries for vulnerabilities, and extract credentials (CWE-552)."
         ),
         "impact": (
@@ -547,18 +547,18 @@ _PATCH_EXAMPLES: dict[str, dict[str, str]] = {
         "cvss_score": "7.5",
         "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
         "threat_vector": "Offline Cryptanalysis / Binary Disassembly of Validation Table",
-        "reproduction_command": "objdump -d -j .text keykeeper | grep -A 20 '<main>'",
+        "reproduction_command": "objdump -d -j .text daemon.elf | grep -A 20 '<main>'",
         "verification_test": "test client communicates with server over TLS with mutual auth",
 
         "title": "Reversible / Obfuscated Authentication Passkey in Binary",
         "plain_english_summary": (
             "The client binary employs a trivial static XOR rotation routine to validate "
-            "a passkey ('R3v3rs3_Th3_Z0n3'). Because all tables and constants reside in the "
+            "a passkey ('H4rdc0d3d_P4ssk3y!'). Because all tables and constants reside in the "
             "binary's read-only data (.rodata), any attacker with a disassembler can reverse "
             "the authorization key in seconds (CWE-259, CWE-327)."
         ),
         "impact": (
-            "Trivial circumvention of access controls on associated services (such as the Game Zone console)."
+            "Trivial circumvention of access controls on associated services (such as administrative consoles)."
         ),
         "recommended_fix": (
             "Do not rely on client-side secret verification. Use server-side asymmetric "
@@ -608,13 +608,13 @@ _PATCH_EXAMPLES: dict[str, dict[str, str]] = {
         "cvss_score": "9.8",
         "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
         "threat_vector": "Arbitrary File Dereference / Memory-mapped Path Disclosure",
-        "reproduction_command": "printf 'PIDREQ 58554 /Desktop/flag e068\n' | nc {target} 8833",
-        "verification_test": "printf 'PIDREQ 58554 /etc/passwd 0000\n' | nc {target} 8833 | grep 'INVALID_PATH'",
+        "reproduction_command": "printf 'CMD_GET 001 /opt/app/secret.txt 0000\\n' | nc {target} 8833",
+        "verification_test": "printf 'CMD_GET 001 /etc/passwd 0000\\n' | nc {target} 8833 | grep 'INVALID_PATH'",
 
         "title": "Arbitrary Resource Disclosure via Console Command Injection",
         "plain_english_summary": (
-            "The console protocol command PIDREQ permits requesting arbitrary file paths "
-            "(e.g., /Desktop/flag) using a simple checksum. The server dereferences the path "
+            "The custom console protocol permits requesting arbitrary file paths "
+            "(e.g., /opt/app/secret.txt) using an unauthenticated command format. The server dereferences the path "
             "without validation and outputs confidential contents (CWE-639, CWE-200)."
         ),
         "impact": (

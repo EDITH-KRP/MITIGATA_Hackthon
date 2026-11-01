@@ -356,11 +356,11 @@ def derive_run_relationships(conn: sqlite3.Connection, run_id: str | None = None
         except sqlite3.IntegrityError:
             pass
 
-    # 2. Artifact Vault Download: web_app -> binary (keykeeper)
+    # 2. Artifact Vault Download: web_app -> binary
     if "unauthenticated_artifact_vault_exposure" in finding_ev and web_assets and bin_assets:
         aid, evid = finding_ev["unauthenticated_artifact_vault_exposure"]
         src = web_assets[0]
-        dst = next((ba for ba, bk in assets_by_type.get("binary", []) if "keykeeper" in bk.lower()), bin_assets[0])
+        dst = bin_assets[0]
         try:
             conn.execute(
                 "INSERT INTO relationships (source_id, target_id, relationship_type, evidence_id, confidence) VALUES (?, ?, ?, ?, ?)",
@@ -370,9 +370,9 @@ def derive_run_relationships(conn: sqlite3.Connection, run_id: str | None = None
         except sqlite3.IntegrityError:
             pass
 
-    # 3. Binary Passkey Reversed: binary (keykeeper) -> host
+    # 3. Binary Passkey Reversed: binary -> host
     if bin_assets and host_assets:
-        src = next((ba for ba, bk in assets_by_type.get("binary", []) if "keykeeper" in bk.lower()), bin_assets[0])
+        src = bin_assets[0]
         dst = host_assets[0]
         evid = finding_ev.get("unauthenticated_console_service", ("", ""))[1] or rows[0][6]
         try:
@@ -384,10 +384,10 @@ def derive_run_relationships(conn: sqlite3.Connection, run_id: str | None = None
         except sqlite3.IntegrityError:
             pass
 
-    # 4. Binary Probe: host -> binary (vuln_auth_daemon)
+    # 4. Binary Probe: host -> binary
     if bin_assets and host_assets:
         src = host_assets[0]
-        dst = next((ba for ba, bk in assets_by_type.get("binary", []) if "vuln_auth_daemon" in bk.lower()), bin_assets[-1])
+        dst = bin_assets[-1]
         evid = finding_ev.get("binary_unsafe_function", ("", ""))[1] or rows[0][6]
         try:
             conn.execute(
@@ -398,15 +398,15 @@ def derive_run_relationships(conn: sqlite3.Connection, run_id: str | None = None
         except sqlite3.IntegrityError:
             pass
 
-    # 5. Arbitrary Resource / Flag Disclosure: host (port 8833) -> keykeeper / vuln_auth_daemon
+    # 5. Arbitrary Resource / Flag Disclosure: host -> binary service
     if "flag_disclosure_pidreq" in finding_ev and host_assets and bin_assets:
         aid, evid = finding_ev["flag_disclosure_pidreq"]
         src = host_assets[0]
-        dst = next((ba for ba, bk in assets_by_type.get("binary", []) if "vuln_auth_daemon" in bk.lower()), bin_assets[-1])
+        dst = bin_assets[-1]
         try:
             conn.execute(
                 "INSERT INTO relationships (source_id, target_id, relationship_type, evidence_id, confidence) VALUES (?, ?, ?, ?, ?)",
-                (src, dst, "FLAG_DISCLOSURE_PIDREQ", evid, "high"),
+                (src, dst, "COMMAND_FLAG_DISCLOSURE", evid, "high"),
             )
             inserted += 1
         except sqlite3.IntegrityError:

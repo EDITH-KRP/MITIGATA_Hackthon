@@ -11,9 +11,12 @@ def _safe_commit(conn: sqlite3.Connection) -> None:
 
 import hashlib
 import html.parser
+import http.client
 import json
 import re
+import socket
 import sqlite3
+import ssl
 import time
 import urllib.error
 import urllib.parse
@@ -186,6 +189,92 @@ class ScopeGuardedRedirectHandler(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
+class PinnedHTTPConnection(http.client.HTTPConnection):
+    """HTTPConnection connecting directly to PolicyGate's pinned IP to eliminate DNS rebinding TOCTOU."""
+
+    def __init__(self, *args, gate: PolicyGate | None = None, run_id: str | None = None, **kwargs):
+        self.gate = gate
+        self.run_id = run_id
+        super().__init__(*args, **kwargs)
+
+    def connect(self) -> None:
+        if self.gate is not None:
+            connect_host = self.gate.resolve_and_pin_host(self.host, self.run_id)
+        else:
+            connect_host = self.host
+        self.sock = socket.create_connection(
+            (connect_host, self.port), self.timeout, self.source_address
+        )
+        if self._tunnel_host:
+            self._tunnel()
+
+
+class PinnedHTTPSConnection(http.client.HTTPSConnection):
+    """HTTPSConnection connecting directly to PolicyGate's pinned IP with SNI preservation."""
+
+    def __init__(self, *args, gate: PolicyGate | None = None, run_id: str | None = None, **kwargs):
+        self.gate = gate
+        self.run_id = run_id
+        super().__init__(*args, **kwargs)
+
+    def connect(self) -> None:
+        if self.gate is not None:
+            connect_host = self.gate.resolve_and_pin_host(self.host, self.run_id)
+        else:
+            connect_host = self.host
+        self.sock = socket.create_connection(
+            (connect_host, self.port), self.timeout, self.source_address
+        )
+        if self._tunnel_host:
+            self._tunnel()
+
+        server_hostname = self._tunnel_host if self._tunnel_host else self.host
+        if self._context is not None:
+            self.sock = self._context.wrap_socket(
+                self.sock,
+                server_hostname=server_hostname,
+            )
+        else:
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            self.sock = ctx.wrap_socket(
+                self.sock,
+                server_hostname=server_hostname,
+            )
+
+
+class ScopeGuardedHTTPHandler(urllib.request.HTTPHandler):
+    """HTTPHandler dispatching through DNS-pinned socket connections."""
+
+    def __init__(self, gate: PolicyGate, run_id: str):
+        super().__init__()
+        self.gate = gate
+        self.run_id = run_id
+
+    def http_open(self, req: urllib.request.Request):
+        def _factory(*args, **kwargs):
+            return PinnedHTTPConnection(*args, gate=self.gate, run_id=self.run_id, **kwargs)
+        return self.do_open(_factory, req)
+
+
+class ScopeGuardedHTTPSHandler(urllib.request.HTTPSHandler):
+    """HTTPSHandler dispatching through DNS-pinned TLS socket connections."""
+
+    def __init__(self, gate: PolicyGate, run_id: str, context: ssl.SSLContext | None = None):
+        super().__init__(context=context)
+        self.gate = gate
+        self.run_id = run_id
+        self._custom_context = context
+
+    def https_open(self, req: urllib.request.Request):
+        def _factory(*args, **kwargs):
+            if "context" not in kwargs and self._custom_context is not None:
+                kwargs["context"] = self._custom_context
+            return PinnedHTTPSConnection(*args, gate=self.gate, run_id=self.run_id, **kwargs)
+        return self.do_open(_factory, req)
+
+
 class WebWorker:
     """Crawl permitted in-scope web apps; capture endpoints/forms within policy."""
 
@@ -206,8 +295,13 @@ class WebWorker:
         self.request_delay_s = request_delay_s
         self.binary_cache_dir = Path(binary_cache_dir)
         self.max_binary_bytes = max_binary_bytes  # explicit download cap
+        ssl_ctx = ssl.create_default_context()
+        ssl_ctx.check_hostname = False
+        ssl_ctx.verify_mode = ssl.CERT_NONE
         self._opener = urllib.request.build_opener(
-            ScopeGuardedRedirectHandler(self.gate, self.run_id)
+            ScopeGuardedRedirectHandler(self.gate, self.run_id),
+            ScopeGuardedHTTPHandler(self.gate, self.run_id),
+            ScopeGuardedHTTPSHandler(self.gate, self.run_id, context=ssl_ctx),
         )
 
     def run(self, task: Task) -> dict:

@@ -4,7 +4,7 @@
 [![PTES v1.0 Compliant](https://img.shields.io/badge/PTES-v1.0_Compliant-0ea5e9?style=flat-square)](http://www.pentest-standard.org/)
 [![Scope Policy](https://img.shields.io/badge/Security-Fail--Closed_PolicyGate-10b981?style=flat-square)](docs/safety.md)
 [![Verification Engine](https://img.shields.io/badge/Verification-Deterministic_Playbooks-6366f1?style=flat-square)](src/cart/verify.py)
-[![Test Suite](https://img.shields.io/badge/Tests-43_Passing-22c55e?style=flat-square)](tests/test_cart.py)
+[![Test Suite](https://img.shields.io/badge/Tests-51_Passing-22c55e?style=flat-square)](tests/test_cart.py)
 [![Python Version](https://img.shields.io/badge/Python-3.11_%7C_3.12_%7C_3.13-blue?style=flat-square)](pyproject.toml)
 [![Container](https://img.shields.io/badge/Docker-Ready-38bdf8?style=flat-square)](Dockerfile)
 [![License](https://img.shields.io/badge/License-Proprietary-64748b?style=flat-square)](AGENTS.md)
@@ -192,8 +192,8 @@ CyberForge CART includes a self-contained, multi-stage Docker environment with `
 #### Using Docker Compose
 ```bash
 # 1. Clone repository
-git clone https://github.com/srujankm-dev/CyberForge_CART.git
-cd CyberForge_CART
+git clone https://github.com/EDITH-KRP/MITIGATA_Hackthon.git
+cd MITIGATA_Hackthon
 
 # 2. Build and start container in detached mode
 docker compose up --build -d
@@ -237,8 +237,8 @@ Open your browser at: **`http://localhost:8080`**
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/srujankm-dev/CyberForge_CART.git
-cd CyberForge_CART
+git clone https://github.com/EDITH-KRP/MITIGATA_Hackthon.git
+cd MITIGATA_Hackthon
 
 # 2. Create and activate a clean virtual environment
 python -m venv .venv
@@ -263,11 +263,11 @@ python -m cart.cli ui --port 8080
 Navigate to `http://localhost:8080`. The dashboard initializes clean with zero metrics until a target assessment is triggered.
 
 ### Step 2: Configure & Lock Scope
-Use the header launcher to select a target:
-- **Preset: Mitigata Challenge Lab**: Target `http://192.168.60.139/` (CTF Challenge Environment).
-- **Preset: Port 1111 Service**: Target `http://192.168.60.139:1111/` (Cleartext Basic Auth).
-- **Preset: OWASP Juice Shop**: Target `https://preview.owasp-juice.shop/` (Web Security Suite).
-- **Custom Input**: Enter any hostname, IP, or CIDR block (e.g. `192.168.60.0/24`).
+Use the header launcher to select an authorized target or preset:
+- **Preset: Local OWASP Juice Shop**: Target `http://127.0.0.1:3000/` (Local isolated container).
+- **Preset: Local Assessment Dashboard**: Target `http://127.0.0.1:8080/` (Self-auditing interface).
+- **Preset: Isolated Lab Subnet**: Target `10.0.10.0/24` (Scoped private network).
+- **Custom Input**: Enter any authorized lab URL, IP address, or CIDR block. The zero-trust `PolicyGate` will cryptographically lock scope and fail closed on any out-of-bounds destination.
 
 ### Step 3: Trigger Autonomous Execution
 Click **Launch Assessment**. The orchestrator will:
@@ -336,9 +336,8 @@ CyberForge_CART/
 │           ├── network.py      # Network discovery, port scanning & service detection
 │           ├── web.py          # Web crawler, reverse-proxy bypass & header auditor
 │           └── binary.py       # Static ELF/PE structural analysis & checksec auditor
-├── target_binaries/            # Verified challenge binaries (keykeeper, vuln_worker.bin)
 ├── reports/                    # Generated PTES assessment reports, JSONs, and unified patches
-├── tests/                      # Automated test suite (43 passing unit & integration tests)
+├── tests/                      # Automated test suite (unit and end-to-end integration tests)
 └── docs/                       # Architectural specifications, build plan, and safety policies
 ```
 
@@ -362,10 +361,10 @@ platform win32 -- Python 3.13, pytest-9.2.0
 rootdir: S:\CyberForge_CART
 configfile: pyproject.toml
 testpaths: tests
-collected 43 items
+collected 51 items
 
-tests\test_cart.py ...........................................           [100%]
-============================== 43 passed in 1.22s =============================
+tests\test_cart.py ...................................................   [100%]
+============================== 51 passed in 1.45s =============================
 ```
 
 ---

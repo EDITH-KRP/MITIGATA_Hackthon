@@ -330,37 +330,30 @@ def derive_run_relationships(conn: sqlite3.Connection, run_id: str | None = None
         _fid, aid, _key, _atype, ftype, _sev, evid = r
         finding_ev[ftype] = (aid, evid)
 
-    # 1. Reverse Proxy Bypass / Service Exposure: host -> web_app
-    if "reverse_proxy_ip_spoofing" in finding_ev and host_assets and web_assets:
-        aid, evid = finding_ev["reverse_proxy_ip_spoofing"]
+    # 1. Host -> Web App exposure / access bypass
+    if host_assets and web_assets:
         src = host_assets[0]
         dst = web_assets[0]
+        if "reverse_proxy_ip_spoofing" in finding_ev:
+            _aid, evid = finding_ev["reverse_proxy_ip_spoofing"]
+            rel_type = "REVERSE_PROXY_IP_SPOOFING"
+        else:
+            evid = rows[0][6]
+            rel_type = "WEB_SERVICE_EXPOSURE"
         try:
             conn.execute(
                 "INSERT INTO relationships (source_id, target_id, relationship_type, evidence_id, confidence) VALUES (?, ?, ?, ?, ?)",
-                (src, dst, "REVERSE_PROXY_IP_SPOOFING", evid, "high"),
-            )
-            inserted += 1
-        except sqlite3.IntegrityError:
-            pass
-    elif host_assets and web_assets:
-        src = host_assets[0]
-        dst = web_assets[0]
-        evid = rows[0][6]
-        try:
-            conn.execute(
-                "INSERT INTO relationships (source_id, target_id, relationship_type, evidence_id, confidence) VALUES (?, ?, ?, ?, ?)",
-                (src, dst, "WEB_SERVICE_EXPOSURE", evid, "high"),
+                (src, dst, rel_type, evid, "high"),
             )
             inserted += 1
         except sqlite3.IntegrityError:
             pass
 
-    # 2. Artifact Vault Download: web_app -> binary
-    if "unauthenticated_artifact_vault_exposure" in finding_ev and web_assets and bin_assets:
-        aid, evid = finding_ev["unauthenticated_artifact_vault_exposure"]
+    # 2. Web App -> Binary Artifact Download / Exfiltration
+    if web_assets and bin_assets:
         src = web_assets[0]
         dst = bin_assets[0]
+        evid = finding_ev.get("unauthenticated_artifact_vault_exposure", ("", ""))[1] or rows[0][6]
         try:
             conn.execute(
                 "INSERT INTO relationships (source_id, target_id, relationship_type, evidence_id, confidence) VALUES (?, ?, ?, ?, ?)",
@@ -370,11 +363,11 @@ def derive_run_relationships(conn: sqlite3.Connection, run_id: str | None = None
         except sqlite3.IntegrityError:
             pass
 
-    # 3. Binary Passkey Reversed: binary -> host
+    # 3. Binary Passkey / Credential -> Host Access
     if bin_assets and host_assets:
         src = bin_assets[0]
         dst = host_assets[0]
-        evid = finding_ev.get("unauthenticated_console_service", ("", ""))[1] or rows[0][6]
+        evid = finding_ev.get("weak_reversible_binary_passkey", ("", ""))[1] or finding_ev.get("unauthenticated_console_service", ("", ""))[1] or rows[0][6]
         try:
             conn.execute(
                 "INSERT INTO relationships (source_id, target_id, relationship_type, evidence_id, confidence) VALUES (?, ?, ?, ?, ?)",
@@ -384,7 +377,7 @@ def derive_run_relationships(conn: sqlite3.Connection, run_id: str | None = None
         except sqlite3.IntegrityError:
             pass
 
-    # 4. Binary Probe: host -> binary
+    # 4. Host -> Binary Service Daemon Audit
     if bin_assets and host_assets:
         src = host_assets[0]
         dst = bin_assets[-1]
@@ -398,9 +391,10 @@ def derive_run_relationships(conn: sqlite3.Connection, run_id: str | None = None
         except sqlite3.IntegrityError:
             pass
 
-    # 5. Arbitrary Resource / Flag Disclosure: host -> binary service
-    if "flag_disclosure_pidreq" in finding_ev and host_assets and bin_assets:
-        aid, evid = finding_ev["flag_disclosure_pidreq"]
+    # 5. Command / Flag Disclosure: Host -> Exploit Target
+    if host_assets and bin_assets and any(k in finding_ev for k in ("flag_disclosure_pidreq", "ctf_planted_flag", "sensitive_file_exposure")):
+        key = next(k for k in ("flag_disclosure_pidreq", "ctf_planted_flag", "sensitive_file_exposure") if k in finding_ev)
+        _aid, evid = finding_ev[key]
         src = host_assets[0]
         dst = bin_assets[-1]
         try:

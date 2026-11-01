@@ -314,7 +314,7 @@ def _playbook_reverse_proxy_ip_spoofing(
 ) -> tuple[FindingStatus, str, str]:
     for ev in evidence_list:
         excerpt = ev.get("excerpt", "")
-        if "X-Forwarded-For" in excerpt or "wiki" in excerpt.lower() or "mitigata" in excerpt.lower():
+        if any(k in excerpt.lower() for k in ("x-forwarded-for", "x-real-ip", "client-ip", "proxy bypass", "status: 200", "http/1.1 200")):
             return FindingStatus.CONFIRMED, "high", "Reverse proxy IP spoofing bypass confirmed by successful response"
     return FindingStatus.CANDIDATE, "medium", "Evidence lacked proof of proxy bypass"
 
@@ -324,7 +324,7 @@ def _playbook_unauthenticated_artifact_vault_exposure(
 ) -> tuple[FindingStatus, str, str]:
     for ev in evidence_list:
         excerpt = ev.get("excerpt", "").lower()
-        if any(k in excerpt for k in ("index of /vault", "index of /artifacts", "index of /builds", "artifact vault")):
+        if any(k in excerpt for k in ("index of /vault", "index of /artifacts", "index of /builds", "artifact vault", "directory listing")):
             return FindingStatus.CONFIRMED, "high", "Unauthenticated build artifact repository exposure confirmed"
     return FindingStatus.CANDIDATE, "medium", "Artifact repository exposure unconfirmed"
 
@@ -334,7 +334,7 @@ def _playbook_weak_reversible_binary_passkey(
 ) -> tuple[FindingStatus, str, str]:
     for ev in evidence_list:
         excerpt = ev.get("excerpt", "").lower()
-        if any(k in excerpt for k in ("passkey", "xor key", "hardcoded key", "xor table", "decompiled credential")):
+        if any(k in excerpt for k in ("passkey", "xor key", "hardcoded key", "xor table", "decompiled credential", "static secret")):
             return FindingStatus.CONFIRMED, "high", "Reversible binary passkey algorithm confirmed in disassembly"
     return FindingStatus.CANDIDATE, "medium", "Passkey algorithm unconfirmed"
 
@@ -344,7 +344,7 @@ def _playbook_unauthenticated_console_service(
 ) -> tuple[FindingStatus, str, str]:
     for ev in evidence_list:
         excerpt = ev.get("excerpt", "").lower()
-        if any(k in excerpt for k in ("welcome to the game zone", "console", "admin shell", "terminal service")):
+        if any(k in excerpt for k in ("console", "admin shell", "terminal service", "command shell", "management cli")):
             return FindingStatus.CONFIRMED, "high", "Cleartext administrative console service exposure confirmed"
     return FindingStatus.CANDIDATE, "medium", "Console service unconfirmed"
 

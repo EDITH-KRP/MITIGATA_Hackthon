@@ -633,7 +633,7 @@ pre.report-pre { white-space: pre-wrap; font-family: Consolas, monospace; font-s
   </div>
   <div style="display:flex; gap:0.5rem; margin-top:0.7rem; align-items:center; flex-wrap:wrap;">
     <span style="font-size:0.75rem; color:var(--text-subtle); font-weight:600;">Presets:</span>
-    <button type="button" onclick="setPreset('https://preview.owasp-juice.shop/', 'deep')" class="btn-sec" style="font-size:0.75rem; padding:0.25rem 0.65rem;">OWASP Juice Shop</button>
+    <button type="button" onclick="setPreset('http://127.0.0.1:3000/', 'deep')" class="btn-sec" style="font-size:0.75rem; padding:0.25rem 0.65rem;">Local Juice Shop (127.0.0.1:3000)</button>
     <button type="button" onclick="setPreset('http://127.0.0.1:8080/', 'recon')" class="btn-sec" style="font-size:0.75rem; padding:0.25rem 0.65rem;">Localhost Assessment</button>
     <button type="button" onclick="setPreset('10.0.10.0/24', 'recon')" class="btn-sec" style="font-size:0.75rem; padding:0.25rem 0.65rem;">Lab Subnet (10.0.10.0/24)</button>
     <button type="button" onclick="setPreset('10.0.10.25', 'deep')" class="btn-sec" style="font-size:0.75rem; padding:0.25rem 0.65rem;">Lab Host (10.0.10.25)</button>

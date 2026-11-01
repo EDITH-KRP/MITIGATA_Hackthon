@@ -67,27 +67,46 @@ _UDP_SERVICE_MAP: dict[int, str] = {
 }
 
 
-def _probe_udp_port(ip: str, port: int, timeout_s: float = 0.5) -> tuple[bool, str]:
-    """Single non-destructive UDP probe to detect open/responsive UDP services."""
+def _probe_udp_port(ip: str, port: int, timeout_s: float = 0.5) -> tuple[bool, str, str]:
+    """Single non-destructive UDP probe supporting IPv4/IPv6 to detect UDP services.
+
+    Returns:
+        tuple[bool, str, str]: (is_responsive, banner, state)
+        where state is "open" (confirmed responsive) or "open|filtered" / "closed".
+    """
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+        try:
+            ip_obj = ipaddress.ip_address(ip)
+            family = socket.AF_INET6 if ip_obj.version == 6 else socket.AF_INET
+        except ValueError:
+            family = socket.AF_INET
+
+        with socket.socket(family, socket.SOCK_DGRAM) as s:
             s.settimeout(timeout_s)
             payload = b""
             if port == 53:
                 payload = b"\xaa\xaa\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
             elif port == 123:
                 payload = b"\x1b" + 47 * b"\0"
+            elif port == 161:
+                # SNMPv1 GetRequest
+                payload = b"\x30\x26\x02\x01\x00\x04\x06public\xa0\x19\x02\x04\x00\x00\x00\x01\x02\x01\x00\x02\x01\x00\x30\x0b\x30\x09\x06\x05\x2b\x06\x01\x02\x01\x05\x00"
+            elif port == 137:
+                # NetBIOS Name Query
+                payload = b"\x82\x28\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x20CKAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\x00\x00\x21\x00\x01"
             else:
                 payload = b"\x00" * 4
             s.sendto(payload, (ip, port))
             try:
                 data, _ = s.recvfrom(256)
                 banner = "".join(chr(b) if 0x20 <= b < 0x7F else " " for b in data).strip()
-                return True, banner[:80]
-            except (TimeoutError, OSError):
-                return False, ""
+                return True, banner[:80], "open"
+            except (TimeoutError, OSError) as exc:
+                if getattr(exc, "errno", None) in (10054, 111):
+                    return False, "", "closed"
+                return False, "", "open|filtered"
     except OSError:
-        return False, ""
+        return False, "", "closed"
 
 
 def _check_nmap() -> str | None:
@@ -161,7 +180,10 @@ def _parse_nmap_xml(xml_bytes: bytes, run_id: str) -> tuple[list[Asset], list[Se
 
         for port_el in host_el.findall(".//port"):
             state_el = port_el.find("state")
-            if state_el is None or state_el.get("state") != "open":
+            if state_el is None:
+                continue
+            state_val = state_el.get("state", "")
+            if state_val not in ("open", "open|filtered"):
                 continue
             port_num = int(port_el.get("portid", 0))
             proto = port_el.get("protocol", "tcp")
@@ -181,7 +203,7 @@ def _parse_nmap_xml(xml_bytes: bytes, run_id: str) -> tuple[list[Asset], list[Se
                     port=port_num,
                     service_name=svc_name,
                     version=version,
-                    state="open",
+                    state=state_val,
                 )
             )
 
@@ -331,7 +353,13 @@ def _scan_native_sockets(
         port_list = list(range(1, 65536))
     else:
         port_list = list(_COMMON_PORTS)
-    udp_port_list = list(udp_ports) if udp_ports is not None else list(_COMMON_UDP_PORTS)
+
+    if udp_ports is not None:
+        udp_port_list = list(udp_ports)
+    elif all_ports:
+        udp_port_list = list(range(1, 65536))
+    else:
+        udp_port_list = list(_COMMON_UDP_PORTS)
 
     # Gate-per-IP up front (audit-logged); all in-scope allowed hosts generate jobs
     allowed_ips: list[str] = []
@@ -390,10 +418,10 @@ def _scan_native_sockets(
 
     # UDP probes
     if udp_jobs and (deadline is None or time.monotonic() < deadline):
-        udp_pool_size = max(1, min(16, len(udp_jobs)))
+        udp_pool_size = max(1, min(32, len(udp_jobs)))
         with concurrent.futures.ThreadPoolExecutor(max_workers=udp_pool_size) as pool:
             udp_futures = {
-                pool.submit(_probe_udp_port, ip, port, 0.4): (ip, port)
+                pool.submit(_probe_udp_port, ip, port, 0.35): (ip, port)
                 for ip, port in udp_jobs
             }
             for fut in concurrent.futures.as_completed(udp_futures):
@@ -403,9 +431,9 @@ def _scan_native_sockets(
                     break
                 ip, port = udp_futures[fut]
                 try:
-                    is_open, banner = fut.result()
+                    is_open, banner, _st = fut.result()
                 except Exception:  # noqa: BLE001
-                    is_open, banner = False, ""
+                    is_open, banner, _st = False, "", "closed"
                 if is_open:
                     open_udp.setdefault(ip, {})[port] = banner
 
@@ -580,10 +608,16 @@ class NetworkWorker:
                     if task.budget.get("scan_udp", self.scan_udp):
                         try:
                             udp_xml = Path(tmpdir) / "udp_scan.xml"
-                            udp_ports = ",".join(str(p) for p in _COMMON_UDP_PORTS)
+                            if task.budget.get("all_ports", self.all_ports):
+                                udp_ports_arg = "1-65535"
+                            elif task.budget.get("udp_ports"):
+                                udp_ports_arg = ",".join(str(p) for p in task.budget["udp_ports"])
+                            else:
+                                udp_ports_arg = ",".join(str(p) for p in _COMMON_UDP_PORTS)
+
                             udp_args = [
-                                "-Pn", "-sU", "-p", udp_ports, "--open", "-T4",
-                                "--max-retries", "1", "--host-timeout", "60s",
+                                "-Pn", "-sU", "-p", udp_ports_arg, "--open", "-T4",
+                                "--max-retries", "1", "--host-timeout", str(task.budget.get("timeout_s", 180)) + "s",
                                 "-oX", str(udp_xml), target,
                             ]
                             _run_nmap(self._nmap, udp_args, timeout=90)

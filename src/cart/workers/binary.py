@@ -266,8 +266,10 @@ class BinaryWorker:
         return _sha256(Path(path))
 
     def verify_registered(self, path: str | Path) -> bool:
-        """True only when the on-disk hash matches the manifest entry."""
+        """True only when the on-disk hash matches the manifest or in-run dynamic registry."""
         expected = self.gate.manifest.binary_hashes.get(str(path))
+        if expected is None:
+            expected = self.gate._dynamic_binaries.get(str(path))
         return bool(expected) and expected == self.sha256(path)
 
     def _get_or_create_asset(self, asset_type: str, canonical_key: str) -> str:

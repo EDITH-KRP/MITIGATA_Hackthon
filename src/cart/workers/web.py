@@ -210,7 +210,7 @@ class PinnedHTTPConnection(http.client.HTTPConnection):
 
 
 class PinnedHTTPSConnection(http.client.HTTPSConnection):
-    """HTTPSConnection connecting directly to PolicyGate's pinned IP with SNI preservation."""
+    """HTTPSConnection connecting directly to PolicyGate's pinned IP with SNI & cert verification."""
 
     def __init__(self, *args, gate: PolicyGate | None = None, run_id: str | None = None, **kwargs):
         self.gate = gate
@@ -229,19 +229,11 @@ class PinnedHTTPSConnection(http.client.HTTPSConnection):
             self._tunnel()
 
         server_hostname = self._tunnel_host if self._tunnel_host else self.host
-        if self._context is not None:
-            self.sock = self._context.wrap_socket(
-                self.sock,
-                server_hostname=server_hostname,
-            )
-        else:
-            ctx = ssl.create_default_context()
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
-            self.sock = ctx.wrap_socket(
-                self.sock,
-                server_hostname=server_hostname,
-            )
+        ctx = self._context if self._context is not None else ssl.create_default_context()
+        self.sock = ctx.wrap_socket(
+            self.sock,
+            server_hostname=server_hostname,
+        )
 
 
 class ScopeGuardedHTTPHandler(urllib.request.HTTPHandler):
@@ -287,6 +279,8 @@ class WebWorker:
         request_delay_s: float = 0.2,
         binary_cache_dir: str | Path = "binary_cache",
         max_binary_bytes: int = 16 << 20,
+        verify_ssl: bool = True,
+        ssl_context: ssl.SSLContext | None = None,
     ):
         self.conn = conn
         self.gate = gate
@@ -295,9 +289,17 @@ class WebWorker:
         self.request_delay_s = request_delay_s
         self.binary_cache_dir = Path(binary_cache_dir)
         self.max_binary_bytes = max_binary_bytes  # explicit download cap
-        ssl_ctx = ssl.create_default_context()
-        ssl_ctx.check_hostname = False
-        ssl_ctx.verify_mode = ssl.CERT_NONE
+        self.verify_ssl = verify_ssl
+
+        if ssl_context is not None:
+            ssl_ctx = ssl_context
+        elif verify_ssl:
+            ssl_ctx = ssl.create_default_context()
+        else:
+            ssl_ctx = ssl.create_default_context()
+            ssl_ctx.check_hostname = False
+            ssl_ctx.verify_mode = ssl.CERT_NONE
+
         self._opener = urllib.request.build_opener(
             ScopeGuardedRedirectHandler(self.gate, self.run_id),
             ScopeGuardedHTTPHandler(self.gate, self.run_id),

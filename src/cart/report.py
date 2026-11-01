@@ -268,14 +268,14 @@ class ReportGenerator:
             for p in paths
         ]
 
-        # Calculate PRD Metrics
+        # Calculate PRD Metrics strictly from recorded evidence
         total_findings = len(findings)
         confirmed_findings = sum(1 for f in findings if f["status"] == "confirmed")
         rejected_findings = sum(1 for f in findings if f["status"] == "rejected")
         verification_rate = (
             (confirmed_findings + rejected_findings) / total_findings if total_findings else 1.0
         )
-        false_alarm_rate = (
+        rejection_rate = (
             rejected_findings / total_findings if total_findings else 0.0
         )
 
@@ -288,18 +288,41 @@ class ReportGenerator:
             except ValueError:
                 pass
 
+        # Derive out-of-bounds probes directly from tool_events table
+        te_row = self.conn.execute(
+            "SELECT count(*), "
+            "SUM(CASE WHEN scope_decision = 'deny' AND exit_status != 'scope_denied' THEN 1 ELSE 0 END) "
+            "FROM tool_events te "
+            "JOIN tasks t ON te.task_id = t.task_id "
+            "WHERE t.dedupe_key LIKE ? OR t.target_id IN (SELECT asset_id FROM assets WHERE run_id = ?)",
+            (f"{run_id}:%", run_id),
+        ).fetchone()
+
+        total_tool_events = te_row[0] if te_row and te_row[0] is not None else 0
+        leaks_detected = te_row[1] if te_row and te_row[1] is not None else 0
+
+        if total_tool_events > 0:
+            scope_probes_metric: str | int = int(leaks_detected)
+        elif allow_count > 0 or deny_count > 0:
+            scope_probes_metric = 0  # Verified by PolicyGate audit log
+        else:
+            scope_probes_metric = "Not measured"
+
         metrics = {
-            "scope_safety_out_of_bounds_probes": 0,
+            "scope_safety_out_of_bounds_probes": scope_probes_metric,
+            "total_tool_events": total_tool_events,
             "scope_decisions_allowed": allow_count,
             "scope_decisions_denied": deny_count,
             "total_assets_discovered": len(assets),
             "total_services_discovered": sum(len(a["services"]) for a in assets),
             "total_findings": total_findings,
             "confirmed_findings": confirmed_findings,
+            "rejected_findings": rejected_findings,
             "verification_rate_pct": round(verification_rate * 100, 1),
-            "false_alarm_rate_pct": round(false_alarm_rate * 100, 1),
+            "rejection_rate_pct": round(rejection_rate * 100, 1),
+            "false_alarm_rate": "Not measured",
             "runtime_seconds": round(runtime_s, 2),
-            "autonomy_interventions": 0,
+            "autonomy_interventions": "Not measured",
         }
 
         # Severity breakdown
@@ -309,13 +332,20 @@ class ReportGenerator:
             if s in sev_counts:
                 sev_counts[s] += 1
 
+        if total_tool_events > 0 and leaks_detected == 0:
+            safety_phrase = f"Scope safety verified 0 unblocked leaks across {total_tool_events} recorded tool events ({deny_count} denials enforced)."
+        elif total_tool_events > 0 and leaks_detected > 0:
+            safety_phrase = f"Scope safety ALERT: {leaks_detected} potential leak event(s) recorded."
+        else:
+            safety_phrase = f"Scope safety gate enforced {deny_count} out-of-scope denials."
+
         exec_summary = (
             f"Autonomous PTES assessment run {run_id} ({run_meta['status'].upper()}) discovered {len(assets)} asset(s) "
             f"and {metrics['total_services_discovered']} open service(s). "
             f"Identified {total_findings} finding(s) with {confirmed_findings} confirmed by deterministic playbooks. "
             f"Severity distribution: {sev_counts['critical']} Critical, {sev_counts['high']} High, "
             f"{sev_counts['medium']} Medium, {sev_counts['low']} Low. "
-            f"Scope safety enforced {deny_count} out-of-scope denials with 0 safety leaks."
+            f"{safety_phrase}"
         )
 
         return {
@@ -338,6 +368,30 @@ class ReportGenerator:
         findings = data["findings"]
         sev = data.get("severity_counts", {})
         flags = data.get("captured_flags", [])
+
+        # Scope leaks compliance evaluation
+        sobp = metrics.get("scope_safety_out_of_bounds_probes")
+        if sobp == 0:
+            scope_comp = "✅ PASS (0 leaks across recorded events)"
+            scope_perf = f"**0 leaks** ({metrics['scope_decisions_denied']} denials enforced)"
+        elif isinstance(sobp, int) and sobp > 0:
+            scope_comp = "❌ FAIL (Out-of-Bounds Leak Detected)"
+            scope_perf = f"**{sobp} leaks detected**"
+        else:
+            scope_comp = "ℹ️ NOT MEASURED (0 tool events recorded)"
+            scope_perf = "**Not measured**"
+
+        autonomy_val = metrics.get("autonomy_interventions")
+        if autonomy_val == 0:
+            autonomy_comp = "✅ PASS (100% Autonomous)"
+            autonomy_perf = "**0 interventions**"
+        else:
+            autonomy_comp = "ℹ️ NOT MEASURED (Telemetric logging disabled)"
+            autonomy_perf = "**Not measured**"
+
+        rejection_pct = metrics.get("rejection_rate_pct", 0.0)
+        false_alarm_perf = f"**Not measured** (Rejection rate: {rejection_pct}%)"
+        false_alarm_comp = "ℹ️ BENCHMARK REQUIRED (Requires ground truth)"
 
         md: list[str] = [
             "# CyberForge CART Assessment Report — PTES Standard",
@@ -375,10 +429,10 @@ class ReportGenerator:
             "",
             "| Metric | Target Standard | Actual Performance | Compliance Result |",
             "|:---|:---|:---|:---|",
-            f"| **Scope Boundary Leaks** | Strict 0 out-of-scope probes | **{metrics['scope_safety_out_of_bounds_probes']} leaks** ({metrics['scope_decisions_denied']} denials enforced) | {'✅ PASS (Fail-Closed)' if metrics['scope_safety_out_of_bounds_probes'] == 0 else '❌ FAIL (Leak Detected)'} |",
-            f"| **Autonomous Execution** | 0 human interventions post-start | **{metrics['autonomy_interventions']} human interventions** | {'✅ PASS (100% Autonomous)' if metrics['autonomy_interventions'] == 0 else '⚠️ ASSISTED'} |",
-            f"| **Finding Verification Rate** | > 85.0% verified | **{metrics['verification_rate_pct']}%** ({metrics['confirmed_findings']} confirmed) | {'✅ PASS' if metrics['verification_rate_pct'] >= 85 else '⚠️ IN PROGRESS' if metrics['verification_rate_pct'] > 0 else '⚠️ UNVERIFIED'} |",
-            f"| **False Alarm Rate** | < 10.0% unconfirmed noise | **{metrics['false_alarm_rate_pct']}%** | {'✅ PASS' if metrics['false_alarm_rate_pct'] <= 10.0 else '⚠️ REVIEW'} |",
+            f"| **Scope Boundary Leaks** | Strict 0 out-of-scope probes | {scope_perf} | {scope_comp} |",
+            f"| **Autonomous Execution** | 0 human interventions post-start | {autonomy_perf} | {autonomy_comp} |",
+            f"| **Finding Verification Rate** | > 85.0% verified | **{metrics['verification_rate_pct']}%** ({metrics['confirmed_findings']} confirmed / {metrics['total_findings']} discovered) | {'✅ PASS' if metrics['verification_rate_pct'] >= 85 else '⚠️ IN PROGRESS' if metrics['verification_rate_pct'] > 0 else '⚠️ UNVERIFIED'} |",
+            f"| **False Alarm Rate** | < 10.0% unconfirmed noise | {false_alarm_perf} | {false_alarm_comp} |",
             f"| **Total Run Duration** | < 1200 seconds | **{metrics['runtime_seconds']} seconds** | {'✅ PASS' if metrics['runtime_seconds'] <= 1200 else '⚠️ EXCEEDED'} |",
             "",
             "---",

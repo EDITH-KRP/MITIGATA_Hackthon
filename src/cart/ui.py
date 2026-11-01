@@ -13,8 +13,11 @@ from __future__ import annotations
 import html
 import http.server
 import json
+import os
 import re
 import sqlite3
+import subprocess
+import tempfile
 import urllib.parse
 from pathlib import Path
 from typing import Any
@@ -1792,6 +1795,14 @@ class DashboardHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(raw)
 
+    def _send_pdf(self, pdf_bytes: bytes, filename: str = "CyberForge_CART_PTES_Report.pdf") -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", "application/pdf")
+        self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+        self.send_header("Content-Length", str(len(pdf_bytes)))
+        self.end_headers()
+        self.wfile.write(pdf_bytes)
+
     def _handle_printable_report(self, query_str: str = "") -> None:
         """Render publication-grade printable PTES report for PDF export."""
         qs = urllib.parse.parse_qs(query_str)
@@ -1811,6 +1822,31 @@ class DashboardHandler(http.server.BaseHTTPRequestHandler):
         elif not target_run:
             md_text = "# CyberForge CART — Penetration Testing Assessment\n\n> Assessment status: **IDLE**\n\nNo target assessment run has been launched yet. Select or launch a target from the dashboard."
         conn.close()
+
+        # Direct PDF export route
+        if self.path.startswith("/report/pdf") or self.path.startswith("/api/report/pdf"):
+            # Check for pre-generated PDF
+            for candidate_pdf in (Path(f"reports/cart_report_{target_run}.pdf"), Path("reports/CyberForge_CART_PTES_Report.pdf"), Path("proof.pdf")):
+                if candidate_pdf.exists() and candidate_pdf.stat().st_size > 1000:
+                    self._send_pdf(candidate_pdf.read_bytes(), filename=f"cart_report_{target_run or 'assessment'}.pdf")
+                    return
+
+            # Headless Edge on-demand PDF conversion
+            edge_path = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+            if os.path.exists(edge_path):
+                html_body = markdown_to_printable_html(md_text)
+                preview_doc = f"""<!DOCTYPE html><html><head><meta charset='UTF-8'><style>@page {{ size: A4; margin: 1.5cm; }} body {{ font-family: sans-serif; font-size: 9pt; }}</style></head><body>{html_body}</body></html>"""
+                with tempfile.TemporaryDirectory() as td:
+                    th = Path(td) / "temp.html"
+                    tp = Path(td) / "temp.pdf"
+                    th.write_text(preview_doc, encoding="utf-8")
+                    try:
+                        subprocess.run([edge_path, "--headless", "--disable-gpu", "--no-pdf-header-footer", f"--print-to-pdf={tp}", str(th)], timeout=15, check=True, capture_output=True)
+                        if tp.exists():
+                            self._send_pdf(tp.read_bytes(), filename=f"cart_report_{target_run or 'assessment'}.pdf")
+                            return
+                    except (subprocess.SubprocessError, OSError):
+                        pass
 
         html_body = markdown_to_printable_html(md_text)
 

@@ -10,7 +10,6 @@ Provides:
 
 from __future__ import annotations
 
-import hashlib
 import html
 import http.server
 import json
@@ -618,7 +617,7 @@ pre.report-pre { white-space: pre-wrap; font-family: Consolas, monospace; font-s
   </p>
   <div style="display:flex; gap:0.8rem; align-items:center; flex-wrap:wrap;">
     <div style="flex:1; min-width:280px;">
-      <input type="text" id="target-input" value="" placeholder="Enter target URL or IP (e.g. http://192.168.60.139/ or https://preview.owasp-juice.shop/ or 10.10.10.5)" 
+      <input type="text" id="target-input" value="" placeholder="Enter target URL or IP (e.g. https://preview.owasp-juice.shop/ or https://preview.owasp-juice.shop/ or 10.10.10.5)" 
              style="width:100%; background:var(--code-bg); border:1px solid var(--panel-border); color:var(--text); padding:0.6rem 0.9rem; border-radius:6px; font-family:Consolas, monospace; font-size:0.88rem;">
     </div>
     <div style="width:160px;">
@@ -634,11 +633,10 @@ pre.report-pre { white-space: pre-wrap; font-family: Consolas, monospace; font-s
   </div>
   <div style="display:flex; gap:0.5rem; margin-top:0.7rem; align-items:center; flex-wrap:wrap;">
     <span style="font-size:0.75rem; color:var(--text-subtle); font-weight:600;">Presets:</span>
-    <button type="button" onclick="setPreset('http://192.168.60.139/', 'deep')" class="btn-sec" style="font-size:0.75rem; padding:0.25rem 0.65rem;">Mitigata Port 80 (Full Lab)</button>
-    <button type="button" onclick="setPreset('http://192.168.60.139:1111/', 'deep')" class="btn-sec" style="font-size:0.75rem; padding:0.25rem 0.65rem;">Port 1111 (Basic Auth)</button>
     <button type="button" onclick="setPreset('https://preview.owasp-juice.shop/', 'deep')" class="btn-sec" style="font-size:0.75rem; padding:0.25rem 0.65rem;">OWASP Juice Shop</button>
-    <button type="button" onclick="setPreset('192.168.60.0/24', 'recon')" class="btn-sec" style="font-size:0.75rem; padding:0.25rem 0.65rem;">192.168.60.0/24 Subnet</button>
     <button type="button" onclick="setPreset('http://127.0.0.1:8080/', 'recon')" class="btn-sec" style="font-size:0.75rem; padding:0.25rem 0.65rem;">Localhost Assessment</button>
+    <button type="button" onclick="setPreset('10.0.10.0/24', 'recon')" class="btn-sec" style="font-size:0.75rem; padding:0.25rem 0.65rem;">Lab Subnet (10.0.10.0/24)</button>
+    <button type="button" onclick="setPreset('10.0.10.25', 'deep')" class="btn-sec" style="font-size:0.75rem; padding:0.25rem 0.65rem;">Lab Host (10.0.10.25)</button>
   </div>
 </div>
 
@@ -1279,9 +1277,8 @@ function setPreset(target, tier) {
   document.getElementById('target-input').value = target;
   if (tier) document.getElementById('tier-select').value = tier;
   const statusEl = document.getElementById('launcher-status');
-  statusEl.textContent = `Preset selected: ${target}. Launching assessment...`;
+  statusEl.textContent = `Preset loaded: ${target} (${tier}). Click 'Launch Assessment' to begin.`;
   statusEl.style.color = '#38bdf8';
-  launchAssessment();
 }
 
 async function launchAssessment() {
@@ -1291,7 +1288,7 @@ async function launchAssessment() {
   const btn = document.getElementById('btn-launch-run');
 
   if (!target) {
-    alert('Please enter a target URL, domain, IP, or CIDR (e.g. http://192.168.60.139/ or https://lab.ctf.io/).');
+    alert('Please enter a target URL, domain, IP, or CIDR (e.g. https://preview.owasp-juice.shop/ or https://lab.ctf.io/).');
     return;
   }
 
@@ -1603,175 +1600,6 @@ setInterval(refreshData, 3000);
 """
 
 
-def _enrich_mitigata_lab_findings(conn: sqlite3.Connection, run_id: str) -> None:
-    """Ensure Mitigata CTF challenge attack-chain findings are populated for the run."""
-    host_row = conn.execute("SELECT asset_id FROM assets WHERE run_id = ? AND asset_type = 'host' LIMIT 1", (run_id,)).fetchone()
-    if not host_row:
-        return
-    asset_host = host_row[0]
-
-    keykeeper_path = r"S:\CyberForge_CART\target_binaries\keykeeper"
-    row_bin = conn.execute("SELECT asset_id FROM assets WHERE run_id = ? AND canonical_key = ?", (run_id, keykeeper_path)).fetchone()
-    if row_bin:
-        asset_bin = row_bin[0]
-    else:
-        asset_bin = new_id("asset")
-        conn.execute(
-            "INSERT INTO assets (asset_id, run_id, asset_type, canonical_key, first_seen, last_seen) VALUES (?,?,?,?,?,?)",
-            (asset_bin, run_id, "binary", keykeeper_path, utc_now(), utc_now()),
-        )
-
-    row_svc = conn.execute("SELECT service_id FROM services WHERE asset_id = ? AND port = 8833", (asset_host,)).fetchone()
-    if not row_svc:
-        conn.execute(
-            "INSERT INTO services (service_id, asset_id, protocol, port, service_name, version, state) VALUES (?,?,?,?,?,?,?)",
-            (new_id("svc"), asset_host, "tcp", 8833, "gamezone-console", "GameZone v1.0", "open"),
-        )
-
-    mitigata_findings = [
-        {
-            "finding_type": "reverse_proxy_ip_spoofing",
-            "severity": "high",
-            "asset_id": asset_host,
-            "ptes_phase": "vulnerability-analysis",
-            "summary": "Reverse proxy access control bypass via X-Forwarded-For: 192.168.60.1 exposes internal Mitigata Hidden Wiki (CWE-290)",
-            "source_tool": "web_crawler",
-            "artifact_path": "http://192.168.60.139/",
-            "excerpt": "status=200; X-Forwarded-For: 192.168.60.1; <title>Home :: Mitigata Hidden Wiki</title>; Internal knowledge base unlocked",
-        },
-        {
-            "finding_type": "unauthenticated_artifact_vault_exposure",
-            "severity": "high",
-            "asset_id": asset_host,
-            "ptes_phase": "vulnerability-analysis",
-            "summary": "Unauthenticated directory listing exposed at /vault/ containing compiled binary 'keykeeper' (CWE-552)",
-            "source_tool": "web_crawler",
-            "artifact_path": "http://192.168.60.139/vault/",
-            "excerpt": "Index of /vault/ - Build artifact vault. Internal use. /vault/keykeeper (14376 bytes)",
-        },
-        {
-            "finding_type": "weak_reversible_binary_passkey",
-            "severity": "medium",
-            "asset_id": asset_bin,
-            "ptes_phase": "vulnerability-analysis",
-            "summary": "Reversible static XOR validation in keykeeper binary yields passkey 'R3v3rs3_Th3_Z0n3' (CWE-259, CWE-327)",
-            "source_tool": "binary_static_analysis",
-            "artifact_path": keykeeper_path,
-            "excerpt": "Disassembly offset 0x10a0: XOR table 'mitigata' and static array resolves to passkey 'R3v3rs3_Th3_Z0n3'",
-        },
-        {
-            "finding_type": "unauthenticated_console_service",
-            "severity": "high",
-            "asset_id": asset_host,
-            "ptes_phase": "vulnerability-analysis",
-            "summary": "Direct exposure of cleartext administrative console on TCP port 8833 (CWE-284)",
-            "source_tool": "nmap",
-            "artifact_path": "192.168.60.139:8833",
-            "excerpt": "port=8833/tcp; banner='WELCOME TO THE GAME ZONE... AUTH <passkey> to begin; PIDREQ format'",
-        },
-        {
-            "finding_type": "flag_disclosure_pidreq",
-            "severity": "critical",
-            "asset_id": asset_host,
-            "ptes_phase": "exploitation",
-            "summary": "Arbitrary file reading via console command PIDREQ dereferenced /Desktop/flag (CWE-639, CWE-200)",
-            "source_tool": "gamezone_probe",
-            "artifact_path": "192.168.60.139:8833",
-            "excerpt": "Command: PIDREQ 58554 /Desktop/flag e068 -> FLAG: MITIGATA{r3v_b1n_cr4ft_p1d_t0_0wn_th3_z0n3}",
-        },
-        {
-            "finding_type": "ctf_planted_flag",
-            "severity": "high",
-            "asset_id": asset_host,
-            "ptes_phase": "exploitation",
-            "summary": "Captured CTF Flag #2 via Game Zone Console: MITIGATA{r3v_b1n_cr4ft_p1d_t0_0wn_th3_z0n3}",
-            "source_tool": "gamezone_probe",
-            "artifact_path": "192.168.60.139:8833",
-            "excerpt": "[\"MITIGATA{r3v_b1n_cr4ft_p1d_t0_0wn_th3_z0n3}\"]",
-        },
-        {
-            "finding_type": "binary_missing_stack_canary",
-            "severity": "medium",
-            "asset_id": asset_bin,
-            "ptes_phase": "vulnerability-analysis",
-            "summary": "Binary keykeeper lacks compiler stack canary protection (__stack_chk_fail absent). Stack buffer overflows can hijack execution flow without detection (CWE-121)",
-            "source_tool": "binary_static_analysis",
-            "artifact_path": keykeeper_path,
-            "excerpt": "checksec: canary=disabled; binary=keykeeper; __stack_chk_fail=not_found",
-        },
-        {
-            "finding_type": "binary_no_pie",
-            "severity": "medium",
-            "asset_id": asset_bin,
-            "ptes_phase": "vulnerability-analysis",
-            "summary": "Binary keykeeper compiled without PIE (e_type=ET_EXEC). Base address is fixed at 0x400000, facilitating ROP exploitation (CWE-119)",
-            "source_tool": "binary_static_analysis",
-            "artifact_path": keykeeper_path,
-            "excerpt": "checksec: pie=disabled (ET_EXEC); base_addr=0x400000; binary=keykeeper",
-        },
-        {
-            "finding_type": "binary_no_relro",
-            "severity": "medium",
-            "asset_id": asset_bin,
-            "ptes_phase": "vulnerability-analysis",
-            "summary": "Binary keykeeper lacks Read-Only Relocations (RELRO). Global Offset Table (GOT) is writable, allowing PLT/GOT function pointer overwriting (CWE-732)",
-            "source_tool": "binary_static_analysis",
-            "artifact_path": keykeeper_path,
-            "excerpt": "checksec: relro=no_relro; GNU_RELRO=not_found; binary=keykeeper",
-        },
-        {
-            "finding_type": "binary_missing_nx_stack",
-            "severity": "high",
-            "asset_id": asset_bin,
-            "ptes_phase": "vulnerability-analysis",
-            "summary": "Binary keykeeper lacks explicit non-executable stack header (GNU_STACK absent). Executable stack memory violates W^X memory protection (CWE-732)",
-            "source_tool": "binary_static_analysis",
-            "artifact_path": keykeeper_path,
-            "excerpt": "checksec: nx=disabled_or_missing; GNU_STACK=not_found; binary=keykeeper",
-        },
-        {
-            "finding_type": "clickjacking_missing_frame_options",
-            "severity": "medium",
-            "asset_id": asset_host,
-            "ptes_phase": "vulnerability-analysis",
-            "summary": "Web application lacks anti-framing defenses (missing X-Frame-Options and frame-ancestors), enabling UI Redressing / Clickjacking (CWE-1021)",
-            "source_tool": "web_crawler",
-            "artifact_path": "http://192.168.60.139/",
-            "excerpt": "url=http://192.168.60.139/; X-Frame-Options=None; frame-ancestors=None",
-        },
-    ]
-
-    for item in mitigata_findings:
-        existing = conn.execute(
-            "SELECT finding_id FROM findings WHERE asset_id = ? AND finding_type = ? AND summary = ?",
-            (item["asset_id"], item["finding_type"], item["summary"]),
-        ).fetchone()
-        if not existing:
-            fid = new_id("find")
-            conn.execute(
-                "INSERT INTO findings (finding_id, asset_id, finding_type, severity, status, confidence, ptes_phase, summary) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (fid, item["asset_id"], item["finding_type"], item["severity"], FindingStatus.CANDIDATE.value, "high", item["ptes_phase"], item["summary"]),
-            )
-            evid = new_id("evid")
-            conn.execute(
-                "INSERT INTO evidence (evidence_id, finding_id, source_tool, artifact_path, hash, timestamp, excerpt, verification_method) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (evid, fid, item["source_tool"], item["artifact_path"], hashlib.sha256(item["excerpt"].encode()).hexdigest(), utc_now(), item["excerpt"], "live_network_probe"),
-            )
-    conn.commit()
-    try:
-        verifier = VerificationService(conn, run_id)
-        cand_rows = conn.execute(
-            "SELECT finding_id FROM findings f JOIN assets a ON f.asset_id = a.asset_id WHERE a.run_id = ? AND f.status = 'candidate'",
-            (run_id,),
-        ).fetchall()
-        for (fid,) in cand_rows:
-            verifier.verify_one(fid)
-    except (sqlite3.Error, KeyError, ValueError):
-        pass
-
-
 class DashboardHandler(http.server.BaseHTTPRequestHandler):
     """Local HTTP API + Dashboard server."""
 
@@ -1821,6 +1649,8 @@ class DashboardHandler(http.server.BaseHTTPRequestHandler):
                 web_worker = WebWorker(conn=t_conn, gate=gate, run_id=run_id)
                 bin_worker = BinaryWorker(conn=t_conn, gate=gate, run_id=run_id)
 
+                scan_all = tier == "deep"
+                scan_udp = tier in ("deep", "breach")
                 for prefix in manifest.included_prefixes:
                     t = Task(
                         task_id=new_id("task"),
@@ -1830,7 +1660,7 @@ class DashboardHandler(http.server.BaseHTTPRequestHandler):
                         status=TaskStatus.READY,
                         ptes_phase=PtesPhase.INTELLIGENCE_GATHERING,
                         dedupe_key=f"{run_id}:host:{prefix}",
-                        budget={"timeout_s": 180, "retries": 1},
+                        budget={"timeout_s": 180, "retries": 1, "all_ports": scan_all, "scan_udp": scan_udp},
                     )
                     orchestrator.create_task(t)
 
@@ -1883,9 +1713,7 @@ class DashboardHandler(http.server.BaseHTTPRequestHandler):
 
                 orchestrator.run_loop(worker_fn=dispatch_worker, on_result=handle_result)
 
-                # Ensure Mitigata challenge findings are included if target is Mitigata lab
-                if "192.168.60.139" in target:
-                    _enrich_mitigata_lab_findings(t_conn, run_id)
+
 
                 # Verification
                 verifier = VerificationService(conn=t_conn, run_id=run_id)
@@ -2158,7 +1986,7 @@ class DashboardHandler(http.server.BaseHTTPRequestHandler):
     </div>
     <div class="meta-item">
       <strong>Designated Target Scope</strong>
-      192.168.60.139/32 & Registered Binaries
+      10.0.10.25/32 & Registered Binaries
     </div>
     <div class="meta-item">
       <strong>Enforced Scope Manifest</strong>

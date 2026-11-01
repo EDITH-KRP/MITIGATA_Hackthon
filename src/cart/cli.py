@@ -265,6 +265,9 @@ def cmd_run(args: argparse.Namespace) -> int:
     web_worker = WebWorker(conn=conn, gate=gate, run_id=run_id)
     bin_worker = BinaryWorker(conn=conn, gate=gate, run_id=run_id)
 
+    scan_all = getattr(args, "all_ports", False) or getattr(args, "tier", "") == "deep"
+    scan_udp = getattr(args, "udp", False) or getattr(args, "tier", "") in ("deep", "breach")
+
     # Seed initial tasks from scope manifest
     for prefix in manifest.included_prefixes:
         t = Task(
@@ -275,7 +278,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             status=TaskStatus.READY,
             ptes_phase=PtesPhase.INTELLIGENCE_GATHERING,
             dedupe_key=f"{run_id}:host:{prefix}",
-            budget={"timeout_s": 180, "retries": 1},
+            budget={"timeout_s": 180, "retries": 1, "all_ports": scan_all, "scan_udp": scan_udp},
         )
         orchestrator.create_task(t)
 
@@ -499,6 +502,8 @@ def main(argv: list[str] | None = None) -> int:
     p_run.add_argument("--tier", default="recon", choices=["recon", "breach", "deep"], help="Assessment tier")
     p_run.add_argument("--concurrency", type=int, default=4, help="Max concurrent workers (default 4)")
     p_run.add_argument("--timeout", type=int, default=1200, help="Run budget timeout in seconds (default 1200 / 20 min)")
+    p_run.add_argument("--all-ports", action="store_true", help="Perform full 1-65535 port scan")
+    p_run.add_argument("--udp", action="store_true", help="Include non-destructive UDP service probing")
     p_run.add_argument("--report-dir", default="reports", help="Directory for generated reports")
     p_run.add_argument("--ui", action="store_true", help="Launch live UI dashboard in background during assessment")
 

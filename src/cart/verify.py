@@ -29,7 +29,7 @@ Playbook = object  # type alias for clarity in signatures
 def _playbook_web_form_endpoint(
     finding: dict, evidence_list: list[dict]
 ) -> tuple[FindingStatus, str, str]:
-    """Forms are confirmed if they expose state-changing submission or credential/login input surfaces."""
+    """Forms are verified only if they represent verified state-changing or authentication inputs."""
     for ev in evidence_list:
         try:
             form_data = json.loads(ev.get("excerpt", "{}"))
@@ -40,11 +40,17 @@ def _playbook_web_form_endpoint(
             has_csrf = any("csrf" in i.get("name", "").lower() or "token" in i.get("name", "").lower() for i in named)
             has_auth = any(any(k in i.get("name", "").lower() for k in ("pass", "pwd", "user", "email", "auth", "token")) for i in named) or "login" in action
 
-            if (method in ("POST", "PUT", "DELETE") and not has_csrf and named) or (has_auth and named):
+            if has_auth and named:
                 return (
                     FindingStatus.CONFIRMED,
-                    "high" if (method in ("POST", "PUT", "DELETE") and not has_csrf) else "info",
-                    f"Actionable form submission endpoint verified at {form_data.get('action', '?')} ({len(named)} inputs)",
+                    "info",
+                    f"Authentication form submission endpoint verified at {form_data.get('action', '?')} ({len(named)} inputs)",
+                )
+            if method in ("POST", "PUT", "DELETE") and not has_csrf and named:
+                return (
+                    FindingStatus.NEEDS_REVIEW,
+                    "medium",
+                    f"State-changing {method} form at {form_data.get('action', '?')} lacks anti-CSRF token (requires live transaction forgery validation)",
                 )
             elif named:
                 return (
@@ -151,7 +157,7 @@ def _playbook_ctf_planted_flag(
 def _playbook_binary_unsafe_function(
     finding: dict, evidence_list: list[dict]
 ) -> tuple[FindingStatus, str, str]:
-    """Unsafe libc functions are genuine: CONFIRMED if excerpt names a known unsafe func."""
+    """Unsafe libc functions require confirmed symbol import or explicit call reference."""
     _UNSAFE_FUNCTIONS = {"strcpy", "gets", "system", "sprintf", "popen", "strcat", "execve", "execvp", "execl", "execv"}
     for ev in evidence_list:
         try:
@@ -159,10 +165,17 @@ def _playbook_binary_unsafe_function(
         except (json.JSONDecodeError, AttributeError):
             continue
         if isinstance(data, dict) and data.get("function") in _UNSAFE_FUNCTIONS:
+            # Confirm if imported dynamically or explicitly referenced in symbol tables
+            if data.get("symbol_type") in ("dynamic_import", "reloc", "call") or "imported" in ev.get("excerpt", ""):
+                return (
+                    FindingStatus.CONFIRMED,
+                    "medium",
+                    f"Unsafe function {data['function']!r} confirmed via dynamic symbol table/call import",
+                )
             return (
-                FindingStatus.CONFIRMED,
-                "medium",
-                f"Unsafe function {data['function']!r} confirmed in static analysis output",
+                FindingStatus.NEEDS_REVIEW,
+                "low",
+                f"Unsafe function symbol {data['function']!r} detected; requires call-path verification",
             )
     return (
         FindingStatus.NEEDS_REVIEW,
@@ -651,11 +664,17 @@ class VerificationService:
                 "WHERE a.run_id = ? AND f.status = ?",
                 (self.run_id, FindingStatus.VERIFICATION_QUEUED.value),
             ).fetchall()
+            # Strict run isolation: If run exists in assets, do NOT fall back to other runs
+            has_run_assets = self.conn.execute(
+                "SELECT 1 FROM assets WHERE run_id = ?", (self.run_id,)
+            ).fetchone()
+            if not rows and not has_run_assets:
+                # Standalone test fallback where assets were not keyed by run_id
+                rows = self.conn.execute(
+                    "SELECT finding_id FROM findings WHERE status=?",
+                    (FindingStatus.VERIFICATION_QUEUED.value,),
+                ).fetchall()
         else:
-            rows = []
-
-        # Fallback to all queued if run_id join is empty (e.g. standalone tests)
-        if not rows:
             rows = self.conn.execute(
                 "SELECT finding_id FROM findings WHERE status=?",
                 (FindingStatus.VERIFICATION_QUEUED.value,),

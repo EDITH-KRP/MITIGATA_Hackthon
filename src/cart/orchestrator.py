@@ -179,17 +179,17 @@ class Orchestrator:
     # ------------------------------------------------------------------
 
     def on_run_budget_exhausted(self) -> None:
-        """Cancel all PENDING/READY tasks; mark RUNNING as TIMED_OUT; set run PARTIAL."""
-        # Cancel PENDING and READY
+        """Cancel PENDING/READY tasks; mark RUNNING as TIMED_OUT for current run; set run PARTIAL."""
+        # Cancel PENDING and READY for this run only
         for status in (TaskStatus.PENDING, TaskStatus.READY):
             self.conn.execute(
-                "UPDATE tasks SET status = ? WHERE status = ?",
-                (TaskStatus.CANCELLED.value, status.value),
+                "UPDATE tasks SET status = ? WHERE status = ? AND (dedupe_key LIKE ? OR dedupe_key = '')",
+                (TaskStatus.CANCELLED.value, status.value, f"{self.run_id}:%"),
             )
-        # Mark still-RUNNING tasks as TIMED_OUT
+        # Mark still-RUNNING tasks as TIMED_OUT for this run
         self.conn.execute(
-            "UPDATE tasks SET status = ? WHERE status = ?",
-            (TaskStatus.TIMED_OUT.value, TaskStatus.RUNNING.value),
+            "UPDATE tasks SET status = ? WHERE status = ? AND (dedupe_key LIKE ? OR dedupe_key = '')",
+            (TaskStatus.TIMED_OUT.value, TaskStatus.RUNNING.value, f"{self.run_id}:%"),
         )
         _safe_commit(self.conn)
         self.set_run_status(RunStatus.PARTIAL)

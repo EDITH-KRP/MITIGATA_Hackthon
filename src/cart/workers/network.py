@@ -307,6 +307,7 @@ def _scan_native_sockets(
     run_id: str,
     *,
     ports: list[int] | None = None,
+    all_ports: bool = False,
     udp_ports: list[int] | None = None,
     scan_udp: bool = True,
     max_workers: int = 64,
@@ -324,7 +325,12 @@ def _scan_native_sockets(
     except ValueError:
         return [], []
 
-    port_list = list(ports) if ports is not None else list(_COMMON_PORTS)
+    if ports is not None:
+        port_list = list(ports)
+    elif all_ports:
+        port_list = list(range(1, 65536))
+    else:
+        port_list = list(_COMMON_PORTS)
     udp_port_list = list(udp_ports) if udp_ports is not None else list(_COMMON_UDP_PORTS)
 
     # Gate-per-IP up front (audit-logged); all in-scope allowed hosts generate jobs
@@ -480,9 +486,10 @@ class NetworkWorker:
         )
         deadline = time.monotonic() + timeout_s
         custom_ports = task.budget.get("ports")
+        all_ports = task.budget.get("all_ports", False)
         scan_udp = task.budget.get("scan_udp", True)
         assets, services = _scan_native_sockets(
-            task.target_id, self.gate, self.run_id, ports=custom_ports, scan_udp=scan_udp, deadline=deadline
+            task.target_id, self.gate, self.run_id, ports=custom_ports, all_ports=all_ports, scan_udp=scan_udp, deadline=deadline
         )
         event.finished_at = utc_now()
         event.exit_status = "0"
@@ -551,8 +558,6 @@ class NetworkWorker:
                         "-oX", str(xml_path),
                         target,
                     ]
-                    if task.budget.get("scan_udp", False):
-                        nmap_args.insert(1, "-sU")
                     xml_bytes = _run_nmap(
                         self._nmap,
                         nmap_args,
@@ -560,6 +565,23 @@ class NetworkWorker:
                     )
                     if xml_path.exists():
                         xml_bytes = xml_path.read_bytes()
+
+                    udp_bytes = b""
+                    # Separate, non-interfering UDP scan pass when requested
+                    if task.budget.get("scan_udp", False):
+                        try:
+                            udp_xml = Path(tmpdir) / "udp_scan.xml"
+                            udp_ports = ",".join(str(p) for p in _COMMON_UDP_PORTS)
+                            udp_args = [
+                                "-Pn", "-sU", "-p", udp_ports, "--open", "-T4",
+                                "--max-retries", "1", "--host-timeout", "60s",
+                                "-oX", str(udp_xml), target,
+                            ]
+                            _run_nmap(self._nmap, udp_args, timeout=90)
+                            if udp_xml.exists():
+                                udp_bytes = udp_xml.read_bytes()
+                        except (subprocess.SubprocessError, OSError):
+                            udp_bytes = b""
 
                 output_hash = _sha256_bytes(xml_bytes)
                 event.finished_at = utc_now()
@@ -569,6 +591,10 @@ class NetworkWorker:
 
                 # Normalise XML
                 assets, services = _parse_nmap_xml(xml_bytes, self.run_id)
+                if udp_bytes:
+                    u_assets, u_services = _parse_nmap_xml(udp_bytes, self.run_id)
+                    assets.extend(u_assets)
+                    services.extend(u_services)
                 if not assets:
                     assets, services = self._run_native_scan(
                         task, scope_decision=result.decision

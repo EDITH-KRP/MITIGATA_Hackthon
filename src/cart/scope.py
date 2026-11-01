@@ -48,6 +48,7 @@ class PolicyGate:
         # In-run downloaded copies of in-scope content (web→binary hand-off).
         # NEVER writes to the locked manifest; targets themselves never grow.
         self._dynamic_binaries: dict[str, str] = {}  # path -> sha256
+        self._dns_pinning_cache: dict[str, list[str]] = {}  # hostname -> pinned IP list (DNS rebinding guard)
 
     def bind_store(self, conn: sqlite3.Connection) -> None:
         """Attach a live DB connection so record_decision can persist decisions."""
@@ -58,19 +59,42 @@ class PolicyGate:
     # ------------------------------------------------------------------
 
     def check_destination(self, target: str) -> ScopeDecisionResult:
-        """Check one network destination (IP or CIDR) against the locked scope."""
+        """Check one network destination (IP or CIDR) against the locked scope without memory exhaustion."""
         try:
             net = ipaddress.ip_network(target, strict=False)
-            all_addrs: list = list(net.hosts()) or [net.network_address]
         except ValueError:
             return ScopeDecisionResult(
                 ScopeDecision.DENY, f"unparseable destination: {target!r}", target
             )
-        for addr in all_addrs:
-            result = self.check_ip(addr)
-            if result.decision is ScopeDecision.DENY:
-                return result
-        return ScopeDecisionResult(ScopeDecision.ALLOW, "in locked scope", target)
+
+        # Exclusions always win - O(1) overlap check
+        for ex in self._excluded_nets:
+            if net.overlaps(ex):
+                return ScopeDecisionResult(
+                    ScopeDecision.DENY, f"{target} overlaps excluded network {ex}", target
+                )
+
+        if net.num_addresses == 1:
+            return self.check_ip(net.network_address)
+
+        # Subnet containment check - O(1)
+        for inc in self._nets:
+            if net.subnet_of(inc):
+                return ScopeDecisionResult(
+                    ScopeDecision.ALLOW, f"{target} fully within included scope {inc}", target
+                )
+
+        # Bounded host check for small subnets (<= 256) without building complete lists
+        if net.num_addresses <= 256:
+            for addr in net.hosts():
+                res = self.check_ip(addr)
+                if res.decision is ScopeDecision.DENY:
+                    return res
+            return ScopeDecisionResult(ScopeDecision.ALLOW, "in locked scope", target)
+
+        return ScopeDecisionResult(
+            ScopeDecision.DENY, f"network {target} is not wholly contained within locked scope", target
+        )
 
     def check_ip(self, ip: str | ipaddress.IPv4Address | ipaddress.IPv6Address) -> ScopeDecisionResult:
         addr = ipaddress.ip_address(ip)
@@ -127,6 +151,18 @@ class PolicyGate:
                 f"hostname {hostname!r} could not be resolved: {exc}",
                 url,
             )
+
+        # DNS Rebinding Guard: verify resolution consistency across repeated checks
+        if hostname in self._dns_pinning_cache:
+            pinned = self._dns_pinning_cache[hostname]
+            if not set(resolved_ips).issubset(set(pinned)):
+                return ScopeDecisionResult(
+                    ScopeDecision.DENY,
+                    f"DNS rebinding detected for {hostname!r}: previous {pinned} != current {resolved_ips}",
+                    url,
+                )
+        else:
+            self._dns_pinning_cache[hostname] = resolved_ips
 
         for ip_str in resolved_ips:
             result = self.check_ip(ip_str)
@@ -288,7 +324,10 @@ def setup_scope_for_target(
                 resolved_ips = list({info[4][0] for info in addr_infos})
             except (socket.gaierror, OSError):
                 resolved_ips = []
-        included_prefixes = [f"{ip}/32" for ip in resolved_ips]
+        included_prefixes = [
+            f"{ip}/{128 if ipaddress.ip_address(ip).version == 6 else 32}"
+            for ip in resolved_ips
+        ]
         included_hosts = list(resolved_ips)
 
     # 2. CIDR network blocks (e.g. 192.168.60.0/24)
@@ -346,7 +385,7 @@ def setup_scope_for_target(
 
     # Discover and register target binaries if available on disk
     binary_hashes = dict(binaries or {})
-    if not binary_hashes and (not seed_url or "192.168.60.139" in target):
+    if not binary_hashes:
         bin_dir = Path("target_binaries")
         if bin_dir.exists() and bin_dir.is_dir():
             for bf in bin_dir.glob("*"):

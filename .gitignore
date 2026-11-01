@@ -11,6 +11,10 @@ dist/
 # CART run artifacts
 data/
 artifacts/
+reports/
+scratch/
+*.pptx
+~$*
 *.db
 *.db-wal
 *.db-shm
@@ -20,4 +24,4 @@ graphify-out/
 
 # Env / secrets
 .env
-.venv*/
+.venv*

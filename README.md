@@ -208,7 +208,7 @@ docker compose logs -f
 ```bash
 docker build -t cyberforge-cart .
 docker run -d --name cyberforge-cart \
-  -p 8080:8080 \
+  -p 127.0.0.1:8080:8080 \
   -v "$(pwd)/reports:/app/reports" \
   -v "$(pwd)/cart.db:/app/cart.db" \
   cyberforge-cart
@@ -218,7 +218,7 @@ docker run -d --name cyberforge-cart \
 ```powershell
 docker build -t cyberforge-cart .
 docker run -d --name cyberforge-cart `
-  -p 8080:8080 `
+  -p 127.0.0.1:8080:8080 `
   -v "${PWD}/reports:/app/reports" `
   -v "${PWD}/cart.db:/app/cart.db" `
   cyberforge-cart

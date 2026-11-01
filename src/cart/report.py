@@ -272,12 +272,16 @@ class ReportGenerator:
         total_findings = len(findings)
         confirmed_findings = sum(1 for f in findings if f["status"] == "confirmed")
         rejected_findings = sum(1 for f in findings if f["status"] == "rejected")
-        verification_rate = (
-            (confirmed_findings + rejected_findings) / total_findings if total_findings else 1.0
-        )
-        rejection_rate = (
-            rejected_findings / total_findings if total_findings else 0.0
-        )
+        resolved_findings = confirmed_findings + rejected_findings
+
+        if total_findings > 0:
+            confirmed_rate_pct: float | str = round((confirmed_findings / total_findings) * 100, 1)
+            resolution_rate_pct: float | str = round((resolved_findings / total_findings) * 100, 1)
+            rejection_rate_pct: float | str = round((rejected_findings / total_findings) * 100, 1)
+        else:
+            confirmed_rate_pct = "Not measured"
+            resolution_rate_pct = "Not measured"
+            rejection_rate_pct = "Not measured"
 
         runtime_s = 0.0
         if run_meta["started_at"] and run_meta["completed_at"]:
@@ -318,8 +322,11 @@ class ReportGenerator:
             "total_findings": total_findings,
             "confirmed_findings": confirmed_findings,
             "rejected_findings": rejected_findings,
-            "verification_rate_pct": round(verification_rate * 100, 1),
-            "rejection_rate_pct": round(rejection_rate * 100, 1),
+            "resolved_findings": resolved_findings,
+            "confirmed_rate_pct": confirmed_rate_pct,
+            "resolution_rate_pct": resolution_rate_pct,
+            "verification_rate_pct": resolution_rate_pct,
+            "rejection_rate_pct": rejection_rate_pct,
             "false_alarm_rate": "Not measured",
             "runtime_seconds": round(runtime_s, 2),
             "autonomy_interventions": "Not measured",
@@ -390,8 +397,27 @@ class ReportGenerator:
             autonomy_perf = "**Not measured**"
 
         rejection_pct = metrics.get("rejection_rate_pct", 0.0)
-        false_alarm_perf = f"**Not measured** (Rejection rate: {rejection_pct}%)"
+        if rejection_pct == "Not measured":
+            false_alarm_perf = "**Not measured** (0 findings to evaluate)"
+        else:
+            false_alarm_perf = f"**Not measured** (Rejection rate: {rejection_pct}%)"
         false_alarm_comp = "ℹ️ BENCHMARK REQUIRED (Requires ground truth)"
+
+        if metrics["confirmed_rate_pct"] == "Not measured":
+            conf_perf = "**Not measured** (0 findings discovered)"
+            conf_comp = "⚠️ NOT MEASURED"
+        else:
+            conf_val = float(metrics["confirmed_rate_pct"])
+            conf_perf = f"**{conf_val}%** ({metrics['confirmed_findings']} confirmed / {metrics['total_findings']} discovered)"
+            conf_comp = "✅ PASS" if conf_val >= 85.0 else "⚠️ IN PROGRESS" if conf_val > 0 else "⚠️ UNVERIFIED"
+
+        if metrics["resolution_rate_pct"] == "Not measured":
+            resol_perf = "**Not measured** (0 findings discovered)"
+            resol_comp = "⚠️ NOT MEASURED"
+        else:
+            resol_val = float(metrics["resolution_rate_pct"])
+            resol_perf = f"**{resol_val}%** ({metrics['resolved_findings']} evaluated / {metrics['total_findings']} discovered)"
+            resol_comp = "✅ PASS" if resol_val >= 85.0 else "⚠️ IN PROGRESS"
 
         md: list[str] = [
             "# CyberForge CART Assessment Report — PTES Standard",
@@ -431,7 +457,8 @@ class ReportGenerator:
             "|:---|:---|:---|:---|",
             f"| **Scope Boundary Leaks** | Strict 0 out-of-scope probes | {scope_perf} | {scope_comp} |",
             f"| **Autonomous Execution** | 0 human interventions post-start | {autonomy_perf} | {autonomy_comp} |",
-            f"| **Finding Verification Rate** | > 85.0% verified | **{metrics['verification_rate_pct']}%** ({metrics['confirmed_findings']} confirmed / {metrics['total_findings']} discovered) | {'✅ PASS' if metrics['verification_rate_pct'] >= 85 else '⚠️ IN PROGRESS' if metrics['verification_rate_pct'] > 0 else '⚠️ UNVERIFIED'} |",
+            f"| **Finding Confirmation Rate** | > 85.0% confirmed | {conf_perf} | {conf_comp} |",
+            f"| **Verification Engine Coverage** | 100.0% evaluated | {resol_perf} | {resol_comp} |",
             f"| **False Alarm Rate** | < 10.0% unconfirmed noise | {false_alarm_perf} | {false_alarm_comp} |",
             f"| **Total Run Duration** | < 1200 seconds | **{metrics['runtime_seconds']} seconds** | {'✅ PASS' if metrics['runtime_seconds'] <= 1200 else '⚠️ EXCEEDED'} |",
             "",
@@ -573,11 +600,21 @@ class ReportGenerator:
             ])
 
         # Phase 5: Exploitation & Flag Capture
+        if flags:
+            exploit_summary = (
+                f"Autonomous exploitation successfully verified {len(flags)} high-impact proof(s) "
+                "and CTF target flag(s) without manual intervention, proving end-to-end exploitability."
+            )
+        else:
+            exploit_summary = (
+                "Deterministic verification inspected candidate vulnerabilities. "
+                "No proof-of-concept exploit markers or CTF flags were retrieved during this run."
+            )
+
         md.extend([
             "## Phase 5: Exploitation & CTF Flag Capture Proof",
             "",
-            ("Autonomous exploitation successfully retrieved sensitive proof-of-concept markers and CTF flags "
-            "without manual intervention, verifying end-to-end exploitability."),
+            exploit_summary,
             "",
         ])
 

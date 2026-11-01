@@ -996,6 +996,131 @@ class TestSecurityAndArchitectureRegressions(unittest.TestCase):
         self.assertTrue(worker.all_ports)
         self.assertTrue(worker.scan_udp)
 
+    def test_native_scanner_streaming_large_cidr(self):
+        import time
+
+        from cart.workers.network import _scan_native_sockets
+        manifest = ScopeManifest(
+            scope_version="large_cidr_scope",
+            included_prefixes=["10.0.0.0/8"],
+            locked_at=utc_now(),
+        )
+        gate = PolicyGate(manifest)
+        # Passing 10.0.0.0/8 should stream at most 256 hosts and finish rapidly without RAM exhaustion
+        assets, services, udp_status = _scan_native_sockets(
+            "10.0.0.0/8",
+            gate,
+            "run_large",
+            ports=[80],
+            scan_udp=False,
+            max_workers=4,
+            deadline=time.monotonic() + 2.0,
+        )
+        self.assertIsInstance(assets, list)
+        self.assertIsInstance(services, list)
+        self.assertEqual(udp_status, "skipped")
+
+    def test_native_scanner_udp_timeout_and_event(self):
+        from cart.workers.network import NetworkWorker
+        self.conn.execute("INSERT INTO scope_manifests (scope_version, included_prefixes, included_hosts, exclusions, binary_hashes, created_by, locked_at) VALUES ('udp_timeout_scope', '[\"127.0.0.1/32\"]', '[]', '[]', '{}', 'test', '2026-01-01T00:00:00Z')")
+        self.conn.execute("INSERT INTO runs (run_id, status, tier, started_at, scope_version) VALUES ('run_udp_to', 'running', 'deep', '2026-01-01T00:00:00Z', 'udp_timeout_scope')")
+        self.conn.execute("INSERT INTO tasks (task_id, task_type, owner, target_id, dedupe_key, status) VALUES ('t_udp_to', 'network_discovery', 'network_worker', '127.0.0.1', 'run_udp_to:net:127.0.0.1', 'running')")
+        self.conn.commit()
+
+        manifest = ScopeManifest(
+            scope_version="udp_timeout_scope",
+            included_prefixes=["127.0.0.1/32"],
+            locked_at=utc_now(),
+        )
+        gate = PolicyGate(manifest)
+        worker = NetworkWorker(self.conn, gate, "run_udp_to", scan_udp=True)
+        worker._nmap = None  # Force native scanner path
+        task = Task(
+            task_id="t_udp_to",
+            task_type="network_discovery",
+            owner="network_worker",
+            target_id="127.0.0.1",
+            dedupe_key="run_udp_to:net:127.0.0.1",
+            status=TaskStatus.RUNNING,
+            budget={"timeout_s": 1, "udp_timeout_s": 0.001, "udp_ports": [9999, 9998, 9997]},
+        )
+        result = worker.run(task)
+        self.assertIn("udp_status", result)
+        # Check tool event recorded
+        te_row = self.conn.execute(
+            "SELECT exit_status FROM tool_events WHERE task_id = 't_udp_to'"
+        ).fetchone()
+        self.assertIsNotNone(te_row)
+        self.assertIn(te_row[0], ("0", "partial_udp_timeout"))
+
+    def test_attack_path_hypothesis_when_no_exploit_evidence(self):
+        from cart.attackpath import AttackPathBuilder, derive_run_relationships
+        self.conn.execute("INSERT INTO scope_manifests (scope_version, included_prefixes, included_hosts, exclusions, binary_hashes, created_by, locked_at) VALUES ('s_hypo', '[]', '[]', '[]', '{}', 'test', '2026-01-01T00:00:00Z')")
+        self.conn.execute("INSERT INTO runs (run_id, status, tier, started_at, scope_version) VALUES ('r_hypo', 'completed', 'recon', '2026-01-01T00:00:00Z', 's_hypo')")
+        self.conn.execute("INSERT INTO assets (asset_id, run_id, asset_type, canonical_key, first_seen, last_seen) VALUES ('a_h2', 'r_hypo', 'host', '10.1.1.1', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')")
+        self.conn.execute("INSERT INTO assets (asset_id, run_id, asset_type, canonical_key, first_seen, last_seen) VALUES ('a_w2', 'r_hypo', 'web_app', '10.1.1.1', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')")
+        # Insert finding that is NOT reverse_proxy_ip_spoofing
+        self.conn.execute("INSERT INTO findings (finding_id, asset_id, finding_type, severity, status) VALUES ('f_other', 'a_h2', 'unencrypted_cleartext_service', 'medium', 'confirmed')")
+        self.conn.execute("INSERT INTO evidence (evidence_id, finding_id, source_tool, artifact_path, hash, timestamp, excerpt) VALUES ('e_other', 'f_other', 'tool', 'path', 'hash', '2026-01-01T00:00:00Z', 'ex')")
+        self.conn.commit()
+
+        count = derive_run_relationships(self.conn, "r_hypo")
+        self.assertEqual(count, 1)
+
+        rel = self.conn.execute("SELECT relationship_type, evidence_id, confidence FROM relationships WHERE source_id = 'a_h2' AND target_id = 'a_w2'").fetchone()
+        self.assertIsNotNone(rel)
+        self.assertEqual(rel[0], "WEB_SERVICE_EXPOSURE")
+        self.assertEqual(rel[1], "")  # No borrowed evidence ID
+        self.assertEqual(rel[2], "hypothesis")
+
+        builder = AttackPathBuilder(self.conn, "r_hypo")
+        paths = builder.build()
+        self.assertGreaterEqual(len(paths), 1)
+        self.assertEqual(paths[0].edges[0].confidence_label, "hypothesis")
+        self.assertEqual(paths[0].edges[0].confidence, 0.3)
+
+    def test_report_empty_findings_evidence_accuracy(self):
+        self.conn.execute("INSERT INTO scope_manifests (scope_version, included_prefixes, included_hosts, exclusions, binary_hashes, created_by, locked_at) VALUES ('s_emp', '[\"192.168.1.0/24\"]', '[]', '[]', '{}', 'test', '2026-01-01T00:00:00Z')")
+        self.conn.execute("INSERT INTO runs (run_id, status, tier, started_at, completed_at, scope_version) VALUES ('r_emp', 'completed', 'recon', '2026-01-01T00:00:00Z', '2026-01-01T00:01:00Z', 's_emp')")
+        self.conn.commit()
+
+        rep = ReportGenerator(self.conn)
+        result = rep.generate("r_emp")
+        metrics = result["metrics"]
+        self.assertEqual(metrics["total_findings"], 0)
+        self.assertEqual(metrics["confirmed_rate_pct"], "Not measured")
+        self.assertEqual(metrics["resolution_rate_pct"], "Not measured")
+
+        md_text = Path(result["md_report"]).read_text(encoding="utf-8")
+        self.assertIn("**Not measured** (0 findings discovered)", md_text)
+        self.assertIn("No proof-of-concept exploit markers or CTF flags were retrieved", md_text)
+        self.assertNotIn("Autonomous exploitation successfully retrieved sensitive proof-of-concept", md_text)
+
+    def test_real_udp_probe_socket(self):
+        import socket
+        import threading
+
+        from cart.workers.network import _probe_udp_port
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+
+        def _echo():
+            try:
+                _data, addr = sock.recvfrom(1024)
+                sock.sendto(b"echo_response", addr)
+            except OSError:
+                pass
+
+        t = threading.Thread(target=_echo, daemon=True)
+        t.start()
+
+        is_open, _banner, state = _probe_udp_port("127.0.0.1", port, timeout_s=0.5)
+        sock.close()
+        t.join(timeout=1.0)
+        self.assertTrue(is_open)
+        self.assertEqual(state, "open")
+
 
 if __name__ == "__main__":
     unittest.main()

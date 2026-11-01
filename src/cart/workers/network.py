@@ -12,6 +12,7 @@ def _safe_commit(conn: sqlite3.Connection) -> None:
 import concurrent.futures
 import hashlib
 import ipaddress
+import itertools
 import re
 import shutil
 import socket
@@ -334,18 +335,25 @@ def _scan_native_sockets(
     scan_udp: bool = True,
     max_workers: int = 64,
     deadline: float | None = None,
-) -> tuple[list[Asset], list[Service]]:
+    udp_timeout_s: float | None = None,
+) -> tuple[list[Asset], list[Service], str]:
     """Pure stdlib multi-threaded TCP & UDP scanner (zero external dependencies).
 
-    Builds bounded, non-blocking connect jobs per (allowed host × port),
-    executes them through a ThreadPoolExecutor, and applies PolicyGate rules
-    before submission. Results normalize to canonical Asset + Service records.
+    Builds bounded, non-blocking connect jobs per (allowed host × port) using a
+    sliding-window consumer, streams host CIDRs without materializing huge lists,
+    and applies PolicyGate rules before submission. Results normalize to canonical
+    Asset + Service records.
     """
     try:
         net = ipaddress.ip_network(target, strict=False)
-        hosts = list(net.hosts()) or [net.network_address]
+        if net.num_addresses == 1:
+            hosts = [net.network_address]
+        else:
+            hosts = list(itertools.islice(net.hosts(), 256))
+            if not hosts:
+                hosts = [net.network_address]
     except ValueError:
-        return [], []
+        return [], [], "error"
 
     if ports is not None:
         port_list = list(ports)
@@ -369,73 +377,138 @@ def _scan_native_sockets(
             allowed_ips.append(str(host))
 
     if not allowed_ips:
-        return [], []
+        return [], [], "skipped" if not scan_udp else "completed"
 
     # Host presence phase: for subnets with > 8 hosts, pre-filter for live hosts
     active_ips: list[str] = []
     if len(allowed_ips) > 8:
         presence_ports = [80, 443, 22, 135, 445, 8080]
-        for ip in allowed_ips:
-            for p in presence_ports:
-                is_up, _ = _connect_probe(ip, p, 0.25)
-                if is_up:
-                    active_ips.append(ip)
+        pool_workers = min(64, len(allowed_ips))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=pool_workers) as pool:
+            futs = {
+                pool.submit(_connect_probe, ip, p, 0.15): ip
+                for ip in allowed_ips
+                for p in presence_ports
+            }
+            for fut in concurrent.futures.as_completed(futs):
+                if deadline is not None and time.monotonic() > deadline:
+                    for pending in futs:
+                        pending.cancel()
                     break
+                ip = futs[fut]
+                try:
+                    is_up, _ = fut.result()
+                    if is_up and ip not in active_ips:
+                        active_ips.append(ip)
+                except Exception:  # noqa: BLE001, S110
+                    pass
         if not active_ips:
             active_ips = allowed_ips  # fallback if firewall drops common discovery ports
     else:
         active_ips = allowed_ips
 
-    tcp_jobs: list[tuple[str, int]] = [
-        (ip, port) for ip in active_ips for port in port_list
-    ]
-    udp_jobs: list[tuple[str, int]] = (
-        [(ip, port) for ip in active_ips for port in udp_port_list] if scan_udp else []
-    )
-
     open_tcp: dict[str, dict[int, str]] = {}
     open_udp: dict[str, dict[int, str]] = {}
 
-    # TCP probes
-    pool_size = max(1, min(max_workers, len(tcp_jobs) or 1))
-    with concurrent.futures.ThreadPoolExecutor(max_workers=pool_size) as pool:
-        futures = {
-            pool.submit(_connect_probe, ip, port, 0.4, grab_banner=True): (ip, port)
-            for ip, port in tcp_jobs
-        }
-        for fut in concurrent.futures.as_completed(futures):
-            if deadline is not None and time.monotonic() > deadline:
-                for pending in futures:
-                    pending.cancel()
-                break
-            ip, port = futures[fut]
-            try:
-                is_open, banner = fut.result()
-            except Exception:  # noqa: BLE001 - failed probe = not open
-                is_open, banner = False, ""
-            if is_open:
-                open_tcp.setdefault(ip, {})[port] = banner
+    # TCP probes via bounded sliding window
+    def _tcp_job_generator():
+        for ip in active_ips:
+            for port in port_list:
+                yield (ip, port)
 
-    # UDP probes
-    if udp_jobs and (deadline is None or time.monotonic() < deadline):
-        udp_pool_size = max(1, min(32, len(udp_jobs)))
-        with concurrent.futures.ThreadPoolExecutor(max_workers=udp_pool_size) as pool:
-            udp_futures = {
-                pool.submit(_probe_udp_port, ip, port, 0.35): (ip, port)
-                for ip, port in udp_jobs
-            }
-            for fut in concurrent.futures.as_completed(udp_futures):
-                if deadline is not None and time.monotonic() > deadline:
-                    for pending in udp_futures:
-                        pending.cancel()
-                    break
-                ip, port = udp_futures[fut]
+    total_tcp_jobs = len(active_ips) * len(port_list)
+    pool_size = max(1, min(max_workers, total_tcp_jobs or 1))
+    max_in_flight = pool_size * 4
+    job_gen = _tcp_job_generator()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=pool_size) as pool:
+        futures: dict[concurrent.futures.Future, tuple[str, int]] = {}
+        exhausted = False
+        while not exhausted or futures:
+            if deadline is not None and time.monotonic() > deadline:
+                for f in futures:
+                    f.cancel()
+                break
+
+            while not exhausted and len(futures) < max_in_flight:
                 try:
-                    is_open, banner, _st = fut.result()
+                    ip, port = next(job_gen)
+                    fut = pool.submit(_connect_probe, ip, port, 0.4, grab_banner=True)
+                    futures[fut] = (ip, port)
+                except StopIteration:
+                    exhausted = True
+                    break
+
+            if not futures:
+                break
+
+            done, _ = concurrent.futures.wait(
+                futures.keys(), return_when=concurrent.futures.FIRST_COMPLETED
+            )
+            for fut in done:
+                ip, port = futures.pop(fut)
+                try:
+                    is_open, banner = fut.result()
                 except Exception:  # noqa: BLE001
-                    is_open, banner, _st = False, "", "closed"
+                    is_open, banner = False, ""
                 if is_open:
-                    open_udp.setdefault(ip, {})[port] = banner
+                    open_tcp.setdefault(ip, {})[port] = banner
+
+    # UDP probes via bounded sliding window
+    udp_status = "skipped"
+    if scan_udp:
+        udp_status = "completed"
+        now = time.monotonic()
+        udp_deadline = now + udp_timeout_s if udp_timeout_s is not None else deadline
+        if deadline is not None:
+            udp_deadline = min(udp_deadline, deadline) if udp_deadline is not None else deadline
+
+        if udp_deadline is not None and time.monotonic() >= udp_deadline:
+            udp_status = "timed_out"
+        else:
+            def _udp_job_generator():
+                for ip in active_ips:
+                    for port in udp_port_list:
+                        yield (ip, port)
+
+            total_udp_jobs = len(active_ips) * len(udp_port_list)
+            udp_pool_size = max(1, min(32, total_udp_jobs or 1))
+            max_udp_in_flight = udp_pool_size * 4
+            udp_gen = _udp_job_generator()
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=udp_pool_size) as pool:
+                udp_futures: dict[concurrent.futures.Future, tuple[str, int]] = {}
+                udp_exhausted = False
+                while not udp_exhausted or udp_futures:
+                    if udp_deadline is not None and time.monotonic() > udp_deadline:
+                        udp_status = "timed_out"
+                        for f in udp_futures:
+                            f.cancel()
+                        break
+
+                    while not udp_exhausted and len(udp_futures) < max_udp_in_flight:
+                        try:
+                            ip, port = next(udp_gen)
+                            fut = pool.submit(_probe_udp_port, ip, port, 0.35)
+                            udp_futures[fut] = (ip, port)
+                        except StopIteration:
+                            udp_exhausted = True
+                            break
+
+                    if not udp_futures:
+                        break
+
+                    done, _ = concurrent.futures.wait(
+                        udp_futures.keys(), return_when=concurrent.futures.FIRST_COMPLETED
+                    )
+                    for fut in done:
+                        ip, port = udp_futures.pop(fut)
+                        try:
+                            is_open, banner, _st = fut.result()
+                        except Exception:  # noqa: BLE001
+                            is_open, banner, _st = False, "", "closed"
+                        if is_open:
+                            open_udp.setdefault(ip, {})[port] = banner
 
     all_responsive_ips = sorted(set(open_tcp.keys()) | set(open_udp.keys()))
     assets: list[Asset] = []
@@ -474,7 +547,7 @@ def _scan_native_sockets(
                     state="open",
                 )
             )
-    return assets, services
+    return assets, services, udp_status
 
 
 # ---------------------------------------------------------------------------
@@ -504,13 +577,14 @@ class NetworkWorker:
 
     def _run_native_scan(
         self, task: Task, scope_decision: ScopeDecision | None = None
-    ) -> tuple[list[Asset], list[Service]]:
+    ) -> tuple[list[Asset], list[Service], str]:
         """Run the native scanner with a fresh, audited tool event.
 
         Re-passes the already-computed scope decision when available so the
         audit trail records exactly one allow/deny decision per target.
         """
         timeout_s = task.budget.get("timeout_s", 300)
+        udp_timeout_s = task.budget.get("udp_timeout_s", 180)
         if scope_decision is None:
             scope_decision = self.gate.gate(task.target_id, self.run_id).decision
         event = ToolEvent(
@@ -525,21 +599,28 @@ class NetworkWorker:
         custom_ports = task.budget.get("ports")
         all_ports = task.budget.get("all_ports", self.all_ports)
         scan_udp = task.budget.get("scan_udp", self.scan_udp)
-        assets, services = _scan_native_sockets(
-            task.target_id, self.gate, self.run_id, ports=custom_ports, all_ports=all_ports, scan_udp=scan_udp, deadline=deadline
+        assets, services, udp_status = _scan_native_sockets(
+            task.target_id,
+            self.gate,
+            self.run_id,
+            ports=custom_ports,
+            all_ports=all_ports,
+            scan_udp=scan_udp,
+            deadline=deadline,
+            udp_timeout_s=udp_timeout_s,
         )
         event.finished_at = utc_now()
-        event.exit_status = "0"
+        event.exit_status = "0" if udp_status != "timed_out" else "partial_udp_timeout"
         event.output_hash = hashlib.sha256(
-            f"{len(assets)}:{len(services)}".encode()
+            f"{len(assets)}:{len(services)}:{udp_status}".encode()
         ).hexdigest()
         _persist_tool_event(self.conn, event)
-        return assets, services
+        return assets, services, udp_status
 
     def run(self, task: Task) -> dict:
         """Execute host + port discovery for task.target_id (an IP/CIDR).
 
-        Returns dict with keys: assets, services, web_asset_ids, findings.
+        Returns dict with keys: assets, services, web_asset_ids, findings, udp_status.
         """
         target = task.target_id
         if target.startswith("asset_"):
@@ -569,6 +650,7 @@ class NetworkWorker:
         # Choose scanner: Nmap if available, otherwise native TCP sockets.
         # If Nmap is present but fails at runtime, degrade to native sockets
         # seamlessly — with a failed tool event recorded for the audit trail.
+        udp_status = "skipped"
         if self._nmap is not None:
             try:
                 with tempfile.TemporaryDirectory() as tmpdir:
@@ -606,6 +688,7 @@ class NetworkWorker:
                     udp_bytes = b""
                     # Separate, non-interfering UDP scan pass when requested
                     if task.budget.get("scan_udp", self.scan_udp):
+                        udp_timeout_s = int(task.budget.get("udp_timeout_s", 180))
                         try:
                             udp_xml = Path(tmpdir) / "udp_scan.xml"
                             if task.budget.get("all_ports", self.all_ports):
@@ -617,18 +700,25 @@ class NetworkWorker:
 
                             udp_args = [
                                 "-Pn", "-sU", "-p", udp_ports_arg, "--open", "-T4",
-                                "--max-retries", "1", "--host-timeout", str(task.budget.get("timeout_s", 180)) + "s",
+                                "--max-retries", "1", "--host-timeout", f"{udp_timeout_s}s",
                                 "-oX", str(udp_xml), target,
                             ]
-                            _run_nmap(self._nmap, udp_args, timeout=90)
+                            _run_nmap(self._nmap, udp_args, timeout=udp_timeout_s)
                             if udp_xml.exists():
                                 udp_bytes = udp_xml.read_bytes()
+                                udp_status = "completed"
+                            else:
+                                udp_status = "error"
+                        except subprocess.TimeoutExpired:
+                            udp_bytes = b""
+                            udp_status = "timed_out"
                         except (subprocess.SubprocessError, OSError):
                             udp_bytes = b""
+                            udp_status = "error"
 
                 output_hash = _sha256_bytes(xml_bytes)
                 event.finished_at = utc_now()
-                event.exit_status = "0"
+                event.exit_status = "0" if udp_status != "timed_out" else "partial_udp_timeout"
                 event.output_hash = output_hash
                 _persist_tool_event(self.conn, event)
 
@@ -639,7 +729,7 @@ class NetworkWorker:
                     assets.extend(u_assets)
                     services.extend(u_services)
                 if not assets:
-                    assets, services = self._run_native_scan(
+                    assets, services, udp_status = self._run_native_scan(
                         task, scope_decision=result.decision
                     )
             except (RuntimeError, subprocess.TimeoutExpired, OSError) as exc:
@@ -647,12 +737,12 @@ class NetworkWorker:
                 event.exit_status = f"error:{exc}"
                 _persist_tool_event(self.conn, event)
                 # Seamless degradation: retry discovery with native sockets
-                assets, services = self._run_native_scan(
+                assets, services, udp_status = self._run_native_scan(
                     task, scope_decision=result.decision
                 )
         else:
             # Native socket scan fallback
-            assets, services = self._run_native_scan(
+            assets, services, udp_status = self._run_native_scan(
                 task, scope_decision=result.decision
             )
 
@@ -754,4 +844,5 @@ class NetworkWorker:
             "services": len(services),
             "web_asset_ids": list(set(web_asset_ids)),
             "findings": emitted_findings,
+            "udp_status": udp_status,
         }

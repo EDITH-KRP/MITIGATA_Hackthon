@@ -20,6 +20,8 @@ _CONFIDENCE_MAP: dict[str, float] = {
     "high": 0.9,
     "medium": 0.7,
     "low": 0.5,
+    "inferred": 0.4,
+    "hypothesis": 0.3,
 }
 
 
@@ -111,7 +113,7 @@ class AttackPathBuilder:
                 FROM relationships r
                 JOIN assets a1 ON r.source_id = a1.asset_id
                 JOIN assets a2 ON r.target_id = a2.asset_id
-                JOIN evidence e ON r.evidence_id = e.evidence_id
+                LEFT JOIN evidence e ON r.evidence_id = e.evidence_id
                 WHERE a1.run_id = ? AND a2.run_id = ?
             """
             rows = self.conn.execute(query, (self.run_id, self.run_id)).fetchall()
@@ -122,7 +124,7 @@ class AttackPathBuilder:
             query = """
                 SELECT r.source_id, r.target_id, r.relationship_type, r.evidence_id, r.confidence
                 FROM relationships r
-                JOIN evidence e ON r.evidence_id = e.evidence_id
+                LEFT JOIN evidence e ON r.evidence_id = e.evidence_id
             """
             rows = self.conn.execute(query).fetchall()
             if not rows:
@@ -337,13 +339,15 @@ def derive_run_relationships(conn: sqlite3.Connection, run_id: str | None = None
         if "reverse_proxy_ip_spoofing" in finding_ev:
             _aid, evid = finding_ev["reverse_proxy_ip_spoofing"]
             rel_type = "REVERSE_PROXY_IP_SPOOFING"
+            conf = "high"
         else:
-            evid = rows[0][6]
+            evid = ""
             rel_type = "WEB_SERVICE_EXPOSURE"
+            conf = "hypothesis"
         try:
             conn.execute(
                 "INSERT INTO relationships (source_id, target_id, relationship_type, evidence_id, confidence) VALUES (?, ?, ?, ?, ?)",
-                (src, dst, rel_type, evid, "high"),
+                (src, dst, rel_type, evid, conf),
             )
             inserted += 1
         except sqlite3.IntegrityError:
@@ -353,11 +357,16 @@ def derive_run_relationships(conn: sqlite3.Connection, run_id: str | None = None
     if web_assets and bin_assets:
         src = web_assets[0]
         dst = bin_assets[0]
-        evid = finding_ev.get("unauthenticated_artifact_vault_exposure", ("", ""))[1] or rows[0][6]
+        if "unauthenticated_artifact_vault_exposure" in finding_ev:
+            evid = finding_ev["unauthenticated_artifact_vault_exposure"][1]
+            conf = "high"
+        else:
+            evid = ""
+            conf = "hypothesis"
         try:
             conn.execute(
                 "INSERT INTO relationships (source_id, target_id, relationship_type, evidence_id, confidence) VALUES (?, ?, ?, ?, ?)",
-                (src, dst, "ARTIFACT_VAULT_DOWNLOAD", evid, "high"),
+                (src, dst, "ARTIFACT_VAULT_DOWNLOAD", evid, conf),
             )
             inserted += 1
         except sqlite3.IntegrityError:
@@ -367,11 +376,19 @@ def derive_run_relationships(conn: sqlite3.Connection, run_id: str | None = None
     if bin_assets and host_assets:
         src = bin_assets[0]
         dst = host_assets[0]
-        evid = finding_ev.get("weak_reversible_binary_passkey", ("", ""))[1] or finding_ev.get("unauthenticated_console_service", ("", ""))[1] or rows[0][6]
+        if "weak_reversible_binary_passkey" in finding_ev:
+            evid = finding_ev["weak_reversible_binary_passkey"][1]
+            conf = "high"
+        elif "unauthenticated_console_service" in finding_ev:
+            evid = finding_ev["unauthenticated_console_service"][1]
+            conf = "high"
+        else:
+            evid = ""
+            conf = "hypothesis"
         try:
             conn.execute(
                 "INSERT INTO relationships (source_id, target_id, relationship_type, evidence_id, confidence) VALUES (?, ?, ?, ?, ?)",
-                (src, dst, "REVERSED_AUTH_PASSKEY", evid, "high"),
+                (src, dst, "REVERSED_AUTH_PASSKEY", evid, conf),
             )
             inserted += 1
         except sqlite3.IntegrityError:
@@ -381,11 +398,16 @@ def derive_run_relationships(conn: sqlite3.Connection, run_id: str | None = None
     if bin_assets and host_assets:
         src = host_assets[0]
         dst = bin_assets[-1]
-        evid = finding_ev.get("binary_unsafe_function", ("", ""))[1] or rows[0][6]
+        if "binary_unsafe_function" in finding_ev:
+            evid = finding_ev["binary_unsafe_function"][1]
+            conf = "high"
+        else:
+            evid = ""
+            conf = "hypothesis"
         try:
             conn.execute(
                 "INSERT INTO relationships (source_id, target_id, relationship_type, evidence_id, confidence) VALUES (?, ?, ?, ?, ?)",
-                (src, dst, "BINARY_DAEMON_PROBE", evid, "high"),
+                (src, dst, "BINARY_DAEMON_PROBE", evid, conf),
             )
             inserted += 1
         except sqlite3.IntegrityError:

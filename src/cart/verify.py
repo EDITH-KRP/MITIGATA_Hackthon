@@ -29,21 +29,32 @@ Playbook = object  # type alias for clarity in signatures
 def _playbook_web_form_endpoint(
     finding: dict, evidence_list: list[dict]
 ) -> tuple[FindingStatus, str, str]:
-    """Forms are genuine candidates only if they have non-empty input names."""
+    """Forms are confirmed if they expose state-changing submission or credential/login input surfaces."""
     for ev in evidence_list:
         try:
             form_data = json.loads(ev.get("excerpt", "{}"))
             inputs = form_data.get("inputs", [])
             named = [i for i in inputs if i.get("name")]
-            if named:
+            method = form_data.get("method", "").upper()
+            action = str(form_data.get("action", "")).lower()
+            has_csrf = any("csrf" in i.get("name", "").lower() or "token" in i.get("name", "").lower() for i in named)
+            has_auth = any(any(k in i.get("name", "").lower() for k in ("pass", "pwd", "user", "email", "auth", "token")) for i in named) or "login" in action
+
+            if (method in ("POST", "PUT", "DELETE") and not has_csrf and named) or (has_auth and named):
                 return (
                     FindingStatus.CONFIRMED,
-                    "medium",
-                    f"Form with {len(named)} named input(s) confirmed at {form_data.get('action', '?')}",
+                    "high" if (method in ("POST", "PUT", "DELETE") and not has_csrf) else "info",
+                    f"Actionable form submission endpoint verified at {form_data.get('action', '?')} ({len(named)} inputs)",
+                )
+            elif named:
+                return (
+                    FindingStatus.INCONCLUSIVE,
+                    "low",
+                    f"Generic form with {len(named)} input(s) at {form_data.get('action', '?')} (insufficient risk indicator)",
                 )
         except (json.JSONDecodeError, AttributeError):
             pass
-    return FindingStatus.INCONCLUSIVE, "low", "No named form inputs found in evidence"
+    return FindingStatus.REJECTED, "low", "No valid form inputs or state-changing action verified"
 
 
 def _playbook_binary_hardcoded_credential(
@@ -68,35 +79,54 @@ def _playbook_binary_hardcoded_credential(
 def _playbook_binary_shell_reference(
     finding: dict, evidence_list: list[dict]
 ) -> tuple[FindingStatus, str, str]:
+    """Shell strings alone do not prove arbitrary command execution."""
     for ev in evidence_list:
         excerpt = ev.get("excerpt", "").lower()
         if any(sh in excerpt for sh in ("/bin/sh", "/bin/bash", "cmd.exe", "powershell")):
+            if any(func in excerpt for func in ("system", "popen", "execve", "execvp", "call")):
+                return (
+                    FindingStatus.CONFIRMED,
+                    "high",
+                    "Embedded command shell invocation coupled with execution function verified",
+                )
             return (
-                FindingStatus.CONFIRMED,
-                "medium",
-                "Embedded system command shell reference confirmed in binary static strings",
+                FindingStatus.INCONCLUSIVE,
+                "low",
+                "Embedded shell string detected without proof of executable invocation path",
             )
-    return FindingStatus.INCONCLUSIVE, "low", "Could not confirm shell reference"
+    return FindingStatus.REJECTED, "low", "Could not confirm shell reference"
 
 
 def _playbook_binary_network_indicator(
     finding: dict, evidence_list: list[dict]
 ) -> tuple[FindingStatus, str, str]:
+    for ev in evidence_list:
+        excerpt = ev.get("excerpt", "").lower()
+        if re.search(r"\b(socket|connect|bind|listen|http|https)://", excerpt):
+            return (
+                FindingStatus.CONFIRMED,
+                "medium",
+                "Active network communication indicator verified in binary symbols",
+            )
     return (
-        FindingStatus.CONFIRMED,
-        "medium",
-        "Network indicator strings present in binary static analysis output",
+        FindingStatus.INCONCLUSIVE,
+        "low",
+        "Passive string reference without verified network capabilities",
     )
 
 
 def _playbook_binary_debug_artifact(
     finding: dict, evidence_list: list[dict]
 ) -> tuple[FindingStatus, str, str]:
-    return (
-        FindingStatus.CONFIRMED,
-        "low",
-        "Debug/test artifact strings found in binary (informational)",
-    )
+    for ev in evidence_list:
+        excerpt = ev.get("excerpt", "").lower()
+        if any(term in excerpt for term in ("assert", "debug", ".pdb", "test_main", "/tmp/")):
+            return (
+                FindingStatus.CONFIRMED,
+                "low",
+                "Debug artifact / compilation path strings verified in binary symbols",
+            )
+    return FindingStatus.REJECTED, "low", "No debug artifacts verified"
 
 
 def _playbook_ctf_planted_flag(
@@ -160,12 +190,25 @@ def _playbook_insecure_cookie_attributes(
 ) -> tuple[FindingStatus, str, str]:
     for ev in evidence_list:
         excerpt = ev.get("excerpt", "").lower()
-        if "set-cookie" in excerpt or "missing" in excerpt:
+        if "missing httponly" in excerpt or "missing samesite" in excerpt or "missing secure" in excerpt:
             return (
                 FindingStatus.CONFIRMED,
                 "high",
-                "Insecure cookie attributes confirmed in server Set-Cookie response",
+                "Insecure cookie attributes verified (missing HttpOnly / SameSite / Secure)",
             )
+        elif "set-cookie" in excerpt:
+            if "httponly" not in excerpt or "samesite" not in excerpt:
+                return (
+                    FindingStatus.CONFIRMED,
+                    "high",
+                    "Insecure cookie attributes verified in raw Set-Cookie header",
+                )
+            else:
+                return (
+                    FindingStatus.REJECTED,
+                    "high",
+                    "Cookie attributes include HttpOnly, SameSite and Secure; not vulnerable",
+                )
     return FindingStatus.INCONCLUSIVE, "low", "No Set-Cookie evidence found"
 
 
@@ -188,13 +231,13 @@ def _playbook_server_banner_disclosure(
 ) -> tuple[FindingStatus, str, str]:
     for ev in evidence_list:
         excerpt = ev.get("excerpt", "")
-        if re.search(r"\d+\.\d+", excerpt):
+        if re.search(r"(?:apache|nginx|iis|php|openssh|werkzeug|tomcat|lighttpd|caddy|python)[\s/]\d+\.\d+", excerpt, re.IGNORECASE):
             return (
                 FindingStatus.CONFIRMED,
                 "high",
                 "Granular software version banner confirmed in server HTTP headers",
             )
-    return FindingStatus.INCONCLUSIVE, "low", "No version numbers detected in header evidence"
+    return FindingStatus.INCONCLUSIVE, "low", "Generic banner without granular version number (insufficient impact)"
 
 
 def _playbook_unencrypted_cleartext_service(
@@ -600,11 +643,24 @@ class VerificationService:
         return new_status
 
     def verify_all_queued(self) -> dict[str, FindingStatus]:
-        """Process every VERIFICATION_QUEUED finding. Returns {finding_id: outcome}."""
-        rows = self.conn.execute(
-            "SELECT finding_id FROM findings WHERE status=?",
-            (FindingStatus.VERIFICATION_QUEUED.value,),
-        ).fetchall()
+        """Process every VERIFICATION_QUEUED finding for the current run. Returns {finding_id: outcome}."""
+        if self.run_id and self.run_id not in ("", "current", "all"):
+            rows = self.conn.execute(
+                "SELECT f.finding_id FROM findings f "
+                "JOIN assets a ON f.asset_id = a.asset_id "
+                "WHERE a.run_id = ? AND f.status = ?",
+                (self.run_id, FindingStatus.VERIFICATION_QUEUED.value),
+            ).fetchall()
+        else:
+            rows = []
+
+        # Fallback to all queued if run_id join is empty (e.g. standalone tests)
+        if not rows:
+            rows = self.conn.execute(
+                "SELECT finding_id FROM findings WHERE status=?",
+                (FindingStatus.VERIFICATION_QUEUED.value,),
+            ).fetchall()
+
         results: dict[str, FindingStatus] = {}
         for (fid,) in rows:
             try:

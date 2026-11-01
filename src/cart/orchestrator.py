@@ -78,7 +78,10 @@ class Orchestrator:
         return task.task_id
 
     def _task_count(self) -> int:
-        row = self.conn.execute("SELECT COUNT(*) FROM tasks").fetchone()
+        row = self.conn.execute(
+            "SELECT COUNT(*) FROM tasks WHERE dedupe_key LIKE ? OR dedupe_key = ''",
+            (f"{self.run_id}:%",),
+        ).fetchone()
         return row[0] if row else 0
 
     # ------------------------------------------------------------------
@@ -99,8 +102,8 @@ class Orchestrator:
     def ready_tasks(self, max_n: int | None = None) -> list[Task]:
         q = "SELECT task_id, task_type, owner, target_id, status, " \
             "ptes_phase, parent_task_id, dedupe_key, budget " \
-            "FROM tasks WHERE status = ?"
-        rows = self.conn.execute(q, (TaskStatus.READY.value,)).fetchall()
+            "FROM tasks WHERE status = ? AND (dedupe_key LIKE ? OR dedupe_key = '')"
+        rows = self.conn.execute(q, (TaskStatus.READY.value, f"{self.run_id}:%")).fetchall()
         tasks = [self._row_to_task(r) for r in rows]
         return tasks[:max_n]
 
@@ -126,6 +129,8 @@ class Orchestrator:
         task = self.get_task(task_id)
         if task is None:
             raise KeyError(f"unknown task {task_id}")
+        if task.status == new_status:
+            return
         legal: dict[TaskStatus, set[TaskStatus]] = {
             TaskStatus.PENDING: {TaskStatus.READY, TaskStatus.CANCELLED},
             TaskStatus.READY: {TaskStatus.RUNNING, TaskStatus.CANCELLED},
@@ -289,13 +294,15 @@ class Orchestrator:
                                 max_retries=task.budget.get("retries", 1),
                             ),
                         )
-                        if rb.can_retry():
-                            wait = rb.consume()
-                            time.sleep(min(wait, 5))  # cap sleep in loop
-                            self.transition(tid, TaskStatus.FAILED)
-                            self.transition(tid, TaskStatus.READY)
-                        else:
-                            self.transition(tid, TaskStatus.FAILED)
+                        cur_task = self.get_task(tid)
+                        if cur_task and cur_task.status != TaskStatus.SUCCEEDED:
+                            if rb.can_retry():
+                                wait = rb.consume()
+                                time.sleep(min(wait, 5))  # cap sleep in loop
+                                self.transition(tid, TaskStatus.FAILED)
+                                self.transition(tid, TaskStatus.READY)
+                            else:
+                                self.transition(tid, TaskStatus.FAILED)
 
                 # Schedule more tasks up to concurrency cap
                 slots = self.max_concurrency - len(in_flight)

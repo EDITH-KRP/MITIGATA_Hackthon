@@ -5,7 +5,8 @@ services:
       dockerfile: Dockerfile
     container_name: cyberforge-cart
     ports:
-      - "8080:8080"
+      # Bind to localhost only to prevent exposure on all network interfaces
+      - "127.0.0.1:8080:8080"
     volumes:
       # Mount reports and test binaries for persistence
       - ./reports:/app/reports

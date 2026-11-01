@@ -157,6 +157,35 @@ def _persist_tool_event(conn: sqlite3.Connection, event: ToolEvent) -> None:
 # Worker
 # ---------------------------------------------------------------------------
 
+class ScopeGuardedRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Enforces fail-closed PolicyGate evaluation BEFORE following HTTP redirects."""
+
+    def __init__(self, gate: PolicyGate, run_id: str):
+        self.gate = gate
+        self.run_id = run_id
+        super().__init__()
+
+    def redirect_request(
+        self,
+        req: urllib.request.Request,
+        fp,
+        code: int,
+        msg: str,
+        headers,
+        newurl: str,
+    ) -> urllib.request.Request | None:
+        if not newurl.startswith(("http://", "https://")):
+            newurl = urllib.parse.urljoin(req.full_url, newurl)
+
+        # PolicyGate check BEFORE connection is initiated
+        decision = self.gate.gate(newurl, self.run_id, is_url=True)
+        if decision.decision is not ScopeDecision.ALLOW:
+            # Block the redirect: returning None drops the redirect
+            return None
+
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
 class WebWorker:
     """Crawl permitted in-scope web apps; capture endpoints/forms within policy."""
 
@@ -177,6 +206,9 @@ class WebWorker:
         self.request_delay_s = request_delay_s
         self.binary_cache_dir = Path(binary_cache_dir)
         self.max_binary_bytes = max_binary_bytes  # explicit download cap
+        self._opener = urllib.request.build_opener(
+            ScopeGuardedRedirectHandler(self.gate, self.run_id)
+        )
 
     def run(self, task: Task) -> dict:
         """Crawl the web service identified by task.target_id (asset_id).
@@ -246,7 +278,7 @@ class WebWorker:
                 url,
                 headers={"User-Agent": "CART-scanner/0.1 (controlled assessment)"},
             )
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            with self._opener.open(req, timeout=10) as resp:
                 final_url = resp.url
                 if final_url != url:
                     redirect_gate = self.gate.gate(final_url, self.run_id, is_url=True)
@@ -576,6 +608,34 @@ class WebWorker:
             )
             fids.append(fid)
 
+        # 7. Technology & Framework Fingerprinting (CWE-200)
+        tech_signatures = {
+            "Express": [("x-powered-by", "express")],
+            "PHP": [("x-powered-by", "php")],
+            "ASP.NET": [("x-powered-by", "asp.net")],
+            "Next.js": [("x-powered-by", "next.js")],
+            "Werkzeug": [("server", "werkzeug")],
+            "Nginx": [("server", "nginx")],
+            "Apache": [("server", "apache")],
+            "Gunicorn": [("server", "gunicorn")],
+            "Cloudflare": [("server", "cloudflare")],
+        }
+        detected_tech = []
+        for tech, sigs in tech_signatures.items():
+            for hdr_k, hdr_v in sigs:
+                val = str(headers.get(hdr_k, "")).lower() or str(headers.get(hdr_k.title(), "")).lower()
+                if hdr_v in val and tech not in detected_tech:
+                    detected_tech.append(tech)
+        if detected_tech:
+            summary = f"Web technology stack detected at {page_url}: {', '.join(detected_tech)} (CWE-200)"
+            fid = self._emit_finding(
+                task, asset_id, "web_technology_fingerprint", "info",
+                PtesPhase.INTELLIGENCE_GATHERING, summary,
+                page_url, json.dumps({"technologies": detected_tech, "headers": dict(headers)}),
+                confidence="high",
+            )
+            fids.append(fid)
+
         return fids
 
     def _crawl(
@@ -627,7 +687,7 @@ class WebWorker:
                         candidate_url,
                         headers={"User-Agent": "CART-scanner/0.1 (controlled assessment)"},
                     )
-                    with urllib.request.urlopen(p_req, timeout=5) as p_resp:
+                    with self._opener.open(p_req, timeout=5) as p_resp:
                         p_code = getattr(p_resp, "status", 200)
                         if p_code >= 400:
                             continue
@@ -763,7 +823,7 @@ class WebWorker:
                     url,
                     headers={"User-Agent": "CART-scanner/0.1 (controlled assessment)"},
                 )
-                with urllib.request.urlopen(req, timeout=10) as resp:
+                with self._opener.open(req, timeout=10) as resp:
                     # Check redirect destination
                     final_url = resp.url
                     if final_url != url:
@@ -811,7 +871,7 @@ class WebWorker:
                                 s_url,
                                 headers={"User-Agent": "CART-scanner/0.1 (controlled assessment)"},
                             )
-                            with urllib.request.urlopen(s_req, timeout=5) as s_resp:
+                            with self._opener.open(s_req, timeout=5) as s_resp:
                                 s_body = s_resp.read(524288)  # up to 512KB
                                 s_text = s_body.decode(errors="replace")
                                 s_flag_fids = self._scan_page_for_flags(

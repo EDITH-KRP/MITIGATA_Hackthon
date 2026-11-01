@@ -213,7 +213,11 @@ class PolicyGate:
                 utc_now(),
             ),
         )
-        self._conn.commit()
+        try:
+            if getattr(self._conn, "in_transaction", True):
+                self._conn.commit()
+        except sqlite3.OperationalError:
+            pass
 
     # ------------------------------------------------------------------
     # Convenience: check + record in one call
@@ -304,7 +308,10 @@ def setup_scope_for_target(
                     resolved_ips = list({info[4][0] for info in addr_infos})
                 except (socket.gaierror, OSError):
                     resolved_ips = []
-            included_prefixes = [f"{ip}/32" for ip in resolved_ips]
+            included_prefixes = [
+                f"{ip}/{128 if ipaddress.ip_address(ip).version == 6 else 32}"
+                for ip in resolved_ips
+            ]
             included_hosts = list(resolved_ips)
 
     # 3. Host or host:port
@@ -325,7 +332,10 @@ def setup_scope_for_target(
                 resolved_ips = list({info[4][0] for info in addr_infos})
             except (socket.gaierror, OSError):
                 resolved_ips = []
-        included_prefixes = [f"{ip}/32" for ip in resolved_ips]
+        included_prefixes = [
+            f"{ip}/{128 if ipaddress.ip_address(ip).version == 6 else 32}"
+            for ip in resolved_ips
+        ]
         included_hosts = list(resolved_ips)
         if port in (80, 443, 8080, 8000, 1111, 8833, 8888):
             scheme = "https" if port == 443 else "http"

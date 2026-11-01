@@ -8,10 +8,12 @@ no graph database is needed for the first release.
 from __future__ import annotations
 
 import sqlite3
+import threading
 from pathlib import Path
 
 SCHEMA = """
 PRAGMA journal_mode = WAL;
+PRAGMA busy_timeout = 10000;
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS runs (
@@ -145,8 +147,102 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_dedupe ON tasks(dedupe_key) WHERE de
 """
 
 
-def connect(db_path: str | Path, check_same_thread: bool = False) -> sqlite3.Connection:
-    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path, check_same_thread=check_same_thread)
-    conn.executescript(SCHEMA)
-    return conn
+class ThreadSafeCursor:
+    """Thread-safe proxy for sqlite3.Cursor that serializes data retrieval."""
+
+    def __init__(self, cursor: sqlite3.Cursor, lock: threading.RLock):
+        self._cursor = cursor
+        self._lock = lock
+
+    def fetchone(self):
+        with self._lock:
+            return self._cursor.fetchone()
+
+    def fetchall(self):
+        with self._lock:
+            return self._cursor.fetchall()
+
+    def fetchmany(self, *args, **kwargs):
+        with self._lock:
+            return self._cursor.fetchmany(*args, **kwargs)
+
+    def __iter__(self):
+        with self._lock:
+            rows = self._cursor.fetchall()
+        return iter(rows)
+
+    def __getattr__(self, name: str):
+        return getattr(self._cursor, name)
+
+
+class ThreadSafeConnection:
+    """Thread-safe proxy for sqlite3.Connection with serialization lock and resilient commit handling."""
+
+    def __init__(self, conn: sqlite3.Connection):
+        self._conn = conn
+        self._lock = threading.RLock()
+
+    def execute(self, *args, **kwargs) -> ThreadSafeCursor:
+        with self._lock:
+            return ThreadSafeCursor(self._conn.execute(*args, **kwargs), self._lock)
+
+    def executemany(self, *args, **kwargs) -> ThreadSafeCursor:
+        with self._lock:
+            return ThreadSafeCursor(self._conn.executemany(*args, **kwargs), self._lock)
+
+    def executescript(self, *args, **kwargs) -> ThreadSafeCursor:
+        with self._lock:
+            return ThreadSafeCursor(self._conn.executescript(*args, **kwargs), self._lock)
+
+    def commit(self) -> None:
+        with self._lock:
+            try:
+                if getattr(self._conn, "in_transaction", True):
+                    self._conn.commit()
+            except sqlite3.OperationalError as e:
+                if "no transaction is active" in str(e).lower():
+                    pass
+                else:
+                    raise
+
+    def rollback(self) -> None:
+        with self._lock:
+            try:
+                self._conn.rollback()
+            except sqlite3.OperationalError:
+                pass
+
+    def close(self) -> None:
+        with self._lock:
+            self._conn.close()
+
+    def cursor(self) -> ThreadSafeCursor:
+        with self._lock:
+            return ThreadSafeCursor(self._conn.cursor(), self._lock)
+
+    @property
+    def in_transaction(self) -> bool:
+        with self._lock:
+            return self._conn.in_transaction
+
+    def __enter__(self):
+        self._lock.acquire()
+        self._conn.__enter__()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        try:
+            self._conn.__exit__(exc_type, exc_val, exc_tb)
+        finally:
+            self._lock.release()
+
+    def __getattr__(self, name: str):
+        return getattr(self._conn, name)
+
+
+def connect(db_path: str | Path, check_same_thread: bool = False) -> ThreadSafeConnection:
+    if str(db_path) != ":memory:":
+        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+    raw_conn = sqlite3.connect(db_path, check_same_thread=check_same_thread, timeout=10.0)
+    raw_conn.executescript(SCHEMA)
+    return ThreadSafeConnection(raw_conn)

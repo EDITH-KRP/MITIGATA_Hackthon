@@ -53,6 +53,49 @@ class AttackPath:
         return len(self.edges)
 
 
+@dataclass
+class PivotHop:
+    """An operational jump / pivot step through an intermediate asset."""
+    hop_index: int
+    source_asset_id: str
+    target_asset_id: str
+    mechanism: str
+    evidence_id: str
+    verified: bool
+    description: str
+
+
+class PivotController:
+    """Manages and verifies operational multi-hop pivot workflows (Crown Jewel path)."""
+
+    def __init__(self, conn: sqlite3.Connection, run_id: str):
+        self.conn = conn
+        self.run_id = run_id
+
+    def build_verified_pivot_chain(self) -> list[PivotHop]:
+        """Derives a multi-hop operational chain where each hop requires verified credentials/access."""
+        builder = AttackPathBuilder(self.conn, self.run_id)
+        paths = builder.find_crown_jewel_paths(max_depth=6)
+        if not paths:
+            return []
+
+        best_path = paths[0]
+        chain: list[PivotHop] = []
+        for i, edge in enumerate(best_path.edges, start=1):
+            chain.append(
+                PivotHop(
+                    hop_index=i,
+                    source_asset_id=edge.source_id,
+                    target_asset_id=edge.target_id,
+                    mechanism=edge.relationship_type,
+                    evidence_id=edge.evidence_id,
+                    verified=edge.confidence >= 0.7,
+                    description=f"Hop {i}: {edge.source_id} -> {edge.target_id} via {edge.relationship_type}",
+                )
+            )
+        return chain
+
+
 class AttackPathBuilder:
     """Builds graph paths ONLY from validated Relationships in SQLite."""
 

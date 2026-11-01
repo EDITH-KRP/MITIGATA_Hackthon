@@ -347,8 +347,10 @@ def cmd_run(args: argparse.Namespace) -> int:
     print("\n[*] Running Verification Service on candidate findings...")
     verifier = VerificationService(conn=conn, run_id=run_id)
     candidate_rows = conn.execute(
-        "SELECT finding_id FROM findings WHERE status = ?",
-        (FindingStatus.CANDIDATE.value,),
+        "SELECT f.finding_id FROM findings f "
+        "JOIN assets a ON f.asset_id = a.asset_id "
+        "WHERE a.run_id = ? AND f.status = ?",
+        (run_id, FindingStatus.CANDIDATE.value),
     ).fetchall()
     fids = [r[0] for r in candidate_rows]
     verifier.queue(fids)

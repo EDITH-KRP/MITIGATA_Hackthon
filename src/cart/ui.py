@@ -1279,8 +1279,9 @@ function setPreset(target, tier) {
   document.getElementById('target-input').value = target;
   if (tier) document.getElementById('tier-select').value = tier;
   const statusEl = document.getElementById('launcher-status');
-  statusEl.textContent = `Preset loaded: ${target}. Click 'Launch Assessment' to start.`;
+  statusEl.textContent = `Preset selected: ${target}. Launching assessment...`;
   statusEl.style.color = '#38bdf8';
+  launchAssessment();
 }
 
 async function launchAssessment() {
@@ -1888,7 +1889,10 @@ class DashboardHandler(http.server.BaseHTTPRequestHandler):
 
                 # Verification
                 verifier = VerificationService(conn=t_conn, run_id=run_id)
-                cand_rows = t_conn.execute("SELECT finding_id FROM findings WHERE status = ?", (FindingStatus.CANDIDATE.value,)).fetchall()
+                cand_rows = t_conn.execute(
+                    "SELECT f.finding_id FROM findings f JOIN assets a ON f.asset_id = a.asset_id WHERE a.run_id = ? AND f.status = ?",
+                    (run_id, FindingStatus.CANDIDATE.value),
+                ).fetchall()
                 fids = [r[0] for r in cand_rows]
                 verifier.queue(fids)
                 verifier.verify_all_queued()

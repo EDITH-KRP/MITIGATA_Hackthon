@@ -202,6 +202,14 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _safe_commit(conn: sqlite3.Connection) -> None:
+    try:
+        if getattr(conn, "in_transaction", True):
+            conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
+
 def _persist_finding(conn: sqlite3.Connection, f: Finding) -> str:
     try:
         conn.execute(
@@ -210,7 +218,7 @@ def _persist_finding(conn: sqlite3.Connection, f: Finding) -> str:
             (f.finding_id, f.asset_id, f.finding_type, f.severity,
              f.status.value, f.confidence, f.ptes_phase, f.summary),
         )
-        conn.commit()
+        _safe_commit(conn)
     except sqlite3.IntegrityError:
         pass
     return f.finding_id
@@ -224,7 +232,7 @@ def _persist_evidence(conn: sqlite3.Connection, e: Evidence) -> None:
             (e.evidence_id, e.finding_id, e.source_tool, e.artifact_path,
              e.hash, e.timestamp, e.excerpt, e.verification_method),
         )
-        conn.commit()
+        _safe_commit(conn)
     except sqlite3.IntegrityError:
         pass
 
@@ -238,7 +246,7 @@ def _persist_tool_event(conn: sqlite3.Connection, event: ToolEvent) -> None:
          event.scope_decision.value, event.started_at, event.finished_at,
          event.exit_status, event.output_hash),
     )
-    conn.commit()
+    _safe_commit(conn)
 
 
 # ---------------------------------------------------------------------------
@@ -285,7 +293,7 @@ class BinaryWorker:
                 (asset.asset_id, asset.run_id, asset.asset_type,
                  asset.canonical_key, asset.first_seen, asset.last_seen),
             )
-            self.conn.commit()
+            _safe_commit(self.conn)
             return asset.asset_id
         except sqlite3.IntegrityError:
             row = self.conn.execute(

@@ -150,29 +150,29 @@ sequenceDiagram
     participant WebUI as CART UI (Port 8080)
     participant Scope as PolicyGate
     participant Orch as Autonomous Orchestrator
-    participant Target as Lab Target (192.168.60.139)
+    participant Target as Scoped Lab Host (10.0.10.25)
     participant Verifier as Verification Service
     participant Store as SQLite WAL Store
 
-    Judge->>WebUI: Launch Assessment on Lab Target
-    WebUI->>Scope: Submit Target (192.168.60.139, TCP 1-65535)
+    Judge->>WebUI: Launch Assessment on Scoped Target
+    WebUI->>Scope: Submit Target (10.0.10.25, TCP 1-65535)
     Scope->>Scope: Compute SHA-256 Manifest & Lock Scope
     Scope->>Orch: Dispatch Approved Scope
 
     par Tri-Surface Autonomous Sweeps
-        Orch->>Target: Network Recon (Discover Ports 80, 1111, 8833)
-        Orch->>Target: Web Crawl (Identify TinyFileManager & robots.txt)
-        Orch->>Target: Proxy Probe (Bypass via X-Forwarded-For: 192.168.60.1)
+        Orch->>Target: Network Recon (Discover Ports 80, 8080, 8833)
+        Orch->>Target: Web Crawl (Identify application endpoints & robots.txt)
+        Orch->>Target: Proxy Header Audit (Bypass boundary via X-Forwarded-For: 10.0.0.1)
     end
 
-    Target-->>Orch: Disclose Hidden Wiki & Build Vault (/vault/keykeeper)
-    Orch->>Target: Download 'keykeeper' Binary
-    Orch->>Orch: Reverse Static XOR Algorithm (Passkey: 'R3v3rs3_Th3_Z0n3')
+    Target-->>Orch: Disclose Internal Knowledge Base & Artifact Repository (/artifacts/auth_service)
+    Orch->>Target: Download 'auth_service' Binary
+    Orch->>Orch: Reverse Static XOR Algorithm (Passkey: 'Demo_K3y_2026!')
     
-    Orch->>Target: Authenticate to Game Zone Console (Port 8833)
+    Orch->>Target: Authenticate to Management Console (Port 8833)
     Target-->>Orch: Access Granted, Spawn Worker PID
     Orch->>Target: Issue PIDREQ for /Desktop/flag with calculated CRC
-    Target-->>Orch: Disclose Flag: MITIGATA{r3v_b1n_cr4ft_p1d_t0_0wn_th3_z0n3}
+    Target-->>Orch: Disclose Flag: EXAMPLE{c4rt_d3m0_fl4g_pr00f_2026}
 
     Orch->>Verifier: Queue Flag & PoC for Independent Validation
     Verifier->>Verifier: Replay Verification Playbook against SQLite Contracts

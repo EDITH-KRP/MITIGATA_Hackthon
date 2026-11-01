@@ -55,6 +55,40 @@ _PORT_SERVICE_MAP: dict[int, str] = {
     8443: "https-alt", 8888: "http", 9000: "http", 27017: "mongodb",
 }
 
+_COMMON_UDP_PORTS: list[int] = [
+    53, 67, 68, 69, 123, 137, 138, 161, 162, 500, 514, 1194, 1434, 1900, 4500, 5353,
+]
+
+_UDP_SERVICE_MAP: dict[int, str] = {
+    53: "domain", 67: "dhcps", 68: "dhcpc", 69: "tftp", 123: "ntp",
+    137: "netbios-ns", 138: "netbios-dgm", 161: "snmp", 162: "snmptrap",
+    500: "isakmp", 514: "syslog", 1194: "openvpn", 1434: "ms-sql-m",
+    1900: "ssdp", 4500: "ipsec-nat-t", 5353: "zeroconf",
+}
+
+
+def _probe_udp_port(ip: str, port: int, timeout_s: float = 0.5) -> tuple[bool, str]:
+    """Single non-destructive UDP probe to detect open/responsive UDP services."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.settimeout(timeout_s)
+            payload = b""
+            if port == 53:
+                payload = b"\xaa\xaa\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+            elif port == 123:
+                payload = b"\x1b" + 47 * b"\0"
+            else:
+                payload = b"\x00" * 4
+            s.sendto(payload, (ip, port))
+            try:
+                data, _ = s.recvfrom(256)
+                banner = "".join(chr(b) if 0x20 <= b < 0x7F else " " for b in data).strip()
+                return True, banner[:80]
+            except (TimeoutError, OSError):
+                return False, ""
+    except OSError:
+        return False, ""
+
 
 def _check_nmap() -> str | None:
     """Return path to nmap binary, or None if not installed."""
@@ -273,17 +307,16 @@ def _scan_native_sockets(
     run_id: str,
     *,
     ports: list[int] | None = None,
+    udp_ports: list[int] | None = None,
+    scan_udp: bool = True,
     max_workers: int = 64,
     deadline: float | None = None,
 ) -> tuple[list[Asset], list[Service]]:
-    """Pure stdlib multi-threaded TCP scanner (zero external dependencies).
+    """Pure stdlib multi-threaded TCP & UDP scanner (zero external dependencies).
 
-    Builds one bounded, non-blocking connect_ex job per (allowed host × port),
-    executes them all through a single ThreadPoolExecutor, and applies every
-    PolicyGate rule before submission — exclusions and DENY always win, and
-    each decision is audit-logged via the gate. Results normalise to the
-    canonical Asset + Service records used by the Nmap path so downstream
-    fan-out (web tasks, detail UI) behaves identically.
+    Builds bounded, non-blocking connect jobs per (allowed host × port),
+    executes them through a ThreadPoolExecutor, and applies PolicyGate rules
+    before submission. Results normalize to canonical Asset + Service records.
     """
     try:
         net = ipaddress.ip_network(target, strict=False)
@@ -292,30 +325,52 @@ def _scan_native_sockets(
         return [], []
 
     port_list = list(ports) if ports is not None else list(_COMMON_PORTS)
+    udp_port_list = list(udp_ports) if udp_ports is not None else list(_COMMON_UDP_PORTS)
 
-    # Gate-per-IP up front (audit-logged); only allowed hosts generate jobs
+    # Gate-per-IP up front (audit-logged); all in-scope allowed hosts generate jobs
     allowed_ips: list[str] = []
-    for host in hosts[:256]:
+    for host in hosts:
         decision = gate.gate(str(host), run_id)
         if decision.decision is ScopeDecision.ALLOW:
             allowed_ips.append(str(host))
 
-    jobs: list[tuple[str, int]] = [
-        (ip, port) for ip in allowed_ips for port in port_list
-    ]
-    if not jobs:
+    if not allowed_ips:
         return [], []
 
-    open_detail: dict[str, dict[int, str]] = {}
-    pool_size = max(1, min(max_workers, len(jobs)))
+    # Host presence phase: for subnets with > 8 hosts, pre-filter for live hosts
+    active_ips: list[str] = []
+    if len(allowed_ips) > 8:
+        presence_ports = [80, 443, 22, 135, 445, 8080]
+        for ip in allowed_ips:
+            for p in presence_ports:
+                is_up, _ = _connect_probe(ip, p, 0.25)
+                if is_up:
+                    active_ips.append(ip)
+                    break
+        if not active_ips:
+            active_ips = allowed_ips  # fallback if firewall drops common discovery ports
+    else:
+        active_ips = allowed_ips
+
+    tcp_jobs: list[tuple[str, int]] = [
+        (ip, port) for ip in active_ips for port in port_list
+    ]
+    udp_jobs: list[tuple[str, int]] = (
+        [(ip, port) for ip in active_ips for port in udp_port_list] if scan_udp else []
+    )
+
+    open_tcp: dict[str, dict[int, str]] = {}
+    open_udp: dict[str, dict[int, str]] = {}
+
+    # TCP probes
+    pool_size = max(1, min(max_workers, len(tcp_jobs) or 1))
     with concurrent.futures.ThreadPoolExecutor(max_workers=pool_size) as pool:
         futures = {
             pool.submit(_connect_probe, ip, port, 0.4, grab_banner=True): (ip, port)
-            for ip, port in jobs
+            for ip, port in tcp_jobs
         }
         for fut in concurrent.futures.as_completed(futures):
             if deadline is not None and time.monotonic() > deadline:
-                # Run budget expired — abandon the remaining probes cleanly.
                 for pending in futures:
                     pending.cancel()
                 break
@@ -325,11 +380,33 @@ def _scan_native_sockets(
             except Exception:  # noqa: BLE001 - failed probe = not open
                 is_open, banner = False, ""
             if is_open:
-                open_detail.setdefault(ip, {})[port] = banner
+                open_tcp.setdefault(ip, {})[port] = banner
 
+    # UDP probes
+    if udp_jobs and (deadline is None or time.monotonic() < deadline):
+        udp_pool_size = max(1, min(16, len(udp_jobs)))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=udp_pool_size) as pool:
+            udp_futures = {
+                pool.submit(_probe_udp_port, ip, port, 0.4): (ip, port)
+                for ip, port in udp_jobs
+            }
+            for fut in concurrent.futures.as_completed(udp_futures):
+                if deadline is not None and time.monotonic() > deadline:
+                    for pending in udp_futures:
+                        pending.cancel()
+                    break
+                ip, port = udp_futures[fut]
+                try:
+                    is_open, banner = fut.result()
+                except Exception:  # noqa: BLE001
+                    is_open, banner = False, ""
+                if is_open:
+                    open_udp.setdefault(ip, {})[port] = banner
+
+    all_responsive_ips = sorted(set(open_tcp.keys()) | set(open_udp.keys()))
     assets: list[Asset] = []
     services: list[Service] = []
-    for ip in sorted(open_detail):
+    for ip in all_responsive_ips:
         asset = Asset(
             asset_id=new_id("asset"),
             run_id=run_id,
@@ -337,8 +414,8 @@ def _scan_native_sockets(
             canonical_key=ip,
         )
         assets.append(asset)
-        for port in sorted(open_detail[ip]):
-            banner = open_detail[ip][port]
+        for port in sorted(open_tcp.get(ip, {})):
+            banner = open_tcp[ip][port]
             services.append(
                 Service(
                     service_id=new_id("svc"),
@@ -346,6 +423,19 @@ def _scan_native_sockets(
                     protocol="tcp",
                     port=port,
                     service_name=_PORT_SERVICE_MAP.get(port, "unknown"),
+                    version=banner,
+                    state="open",
+                )
+            )
+        for port in sorted(open_udp.get(ip, {})):
+            banner = open_udp[ip][port]
+            services.append(
+                Service(
+                    service_id=new_id("svc"),
+                    asset_id=asset.asset_id,
+                    protocol="udp",
+                    port=port,
+                    service_name=_UDP_SERVICE_MAP.get(port, "unknown"),
                     version=banner,
                     state="open",
                 )
@@ -389,8 +479,10 @@ class NetworkWorker:
             started_at=utc_now(),
         )
         deadline = time.monotonic() + timeout_s
+        custom_ports = task.budget.get("ports")
+        scan_udp = task.budget.get("scan_udp", True)
         assets, services = _scan_native_sockets(
-            task.target_id, self.gate, self.run_id, deadline=deadline
+            task.target_id, self.gate, self.run_id, ports=custom_ports, scan_udp=scan_udp, deadline=deadline
         )
         event.finished_at = utc_now()
         event.exit_status = "0"
@@ -437,12 +529,21 @@ class NetworkWorker:
             try:
                 with tempfile.TemporaryDirectory() as tmpdir:
                     xml_path = Path(tmpdir) / "scan.xml"
-                    ports_arg = ",".join(str(p) for p in _COMMON_PORTS)
+                    port_range = task.budget.get("port_range")
+                    if port_range:
+                        ports_arg = str(port_range)
+                    elif task.budget.get("all_ports", False):
+                        ports_arg = "1-65535"
+                    elif task.budget.get("ports"):
+                        ports_arg = ",".join(str(p) for p in task.budget["ports"])
+                    else:
+                        ports_arg = ",".join(str(p) for p in _COMMON_PORTS)
+
                     nmap_args = [
                         "-Pn",            # treat all hosts as online (lab environment / firewalled targets)
                         "-sV",            # version detection
                         "--version-light",
-                        "-p", ports_arg,  # bounded port scanning avoids firewall timeouts
+                        "-p", ports_arg,  # bounded or full port range
                         "--open",         # only open ports
                         "-T4",            # aggressive timing (lab environment)
                         "--max-retries", "1",
@@ -450,6 +551,8 @@ class NetworkWorker:
                         "-oX", str(xml_path),
                         target,
                     ]
+                    if task.budget.get("scan_udp", False):
+                        nmap_args.insert(1, "-sU")
                     xml_bytes = _run_nmap(
                         self._nmap,
                         nmap_args,
